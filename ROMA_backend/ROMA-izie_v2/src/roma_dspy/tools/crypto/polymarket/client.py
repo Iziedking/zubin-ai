@@ -40,7 +40,8 @@ class PolymarketGammaClient:
         offset: int = 0,
         search: Optional[str] = None,
         order_by: str = "volume_24h",
-        sort_by: str = "desc"
+        sort_by: str = "desc",
+        closed: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Fetch markets from Gamma API
@@ -51,13 +52,15 @@ class PolymarketGammaClient:
             search: Search term for market title
             order_by: Field to sort by (volume_24h, liquidity, end_date_iso)
             sort_by: Sort direction (asc, desc)
+            closed: Include closed markets (default: False - only open markets)
         """
         try:
             params = {
                 "limit": limit,
                 "offset": offset,
                 "order_by": order_by,
-                "sort_by": sort_by
+                "sort_by": sort_by,
+                "closed": "true" if closed else "false"
             }
             if search:
                 params["search_term"] = search
@@ -85,16 +88,21 @@ class PolymarketGammaClient:
             logger.error(f"Error fetching market {market_id}: {e}")
             return {}
     
-    async def search_markets(self, query: str) -> List[Dict[str, Any]]:
+    async def search_markets(self, query: str, closed: bool = False) -> List[Dict[str, Any]]:
         """Search for markets by title or description"""
-        return await self.get_markets(search=query, limit=50)
+        return await self.get_markets(search=query, limit=50, closed=closed)
     
-    async def get_markets_by_category(self, category: str) -> List[Dict[str, Any]]:
+    async def get_markets_by_category(self, category: str, closed: bool = False) -> List[Dict[str, Any]]:
         """Fetch markets in a specific category"""
         try:
+            params = {
+                "category": category,
+                "limit": 100,
+                "closed": "true" if closed else "false"
+            }
             response = await self.client.get(
                 f"{self.BASE_URL}/markets",
-                params={"category": category, "limit": 100}
+                params=params
             )
             response.raise_for_status()
             return response.json()
@@ -103,19 +111,21 @@ class PolymarketGammaClient:
             return []
     
     async def get_trending_markets(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Get trending markets (highest volume 24h)"""
+        """Get trending markets (highest volume 24h) - only open markets"""
         return await self.get_markets(
             limit=limit,
             order_by="volume_24h",
-            sort_by="desc"
+            sort_by="desc",
+            closed=False  # Only open markets
         )
     
     async def get_liquidity_leaders(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Get most liquid markets"""
+        """Get most liquid markets - only open markets"""
         return await self.get_markets(
             limit=limit,
             order_by="liquidity",
-            sort_by="desc"
+            sort_by="desc",
+            closed=False  # Only open markets
         )
 
 
