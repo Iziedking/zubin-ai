@@ -13,6 +13,7 @@ from typing import Dict, List, Any, Optional, TYPE_CHECKING
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 import dspy
 
 from roma_dspy.tools.base import BaseToolkit
@@ -173,6 +174,42 @@ class PolymarketToolkit(BaseToolkit):
         if self.subgraph_client:
             await self.subgraph_client.__aexit__(None, None, None)
     
+    def _filter_active_markets(self, markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter out markets that have already ended
+        
+        Args:
+            markets: List of market dictionaries
+            
+        Returns:
+            List of markets with future end dates
+        """
+        now = datetime.now(timezone.utc)
+        active_markets = []
+        
+        for market in markets:
+            end_date_str = market.get("endDate")
+            if not end_date_str:
+                # If no end date, include it
+                active_markets.append(market)
+                continue
+            
+            try:
+                # Parse ISO format date (e.g., "2025-12-31T12:00:00Z")
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                
+                # Only include if end date is in the future
+                if end_date > now:
+                    active_markets.append(market)
+                else:
+                    logger.debug(f"Filtered out expired market: {market.get('question')} (ended {end_date_str})")
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Could not parse end date '{end_date_str}': {e}")
+                # Include market if we can't parse the date (safer to include)
+                active_markets.append(market)
+        
+        return active_markets
+    
     async def search_markets(
         self,
         query: str,
@@ -192,6 +229,9 @@ class PolymarketToolkit(BaseToolkit):
         
         try:
             markets = await self.gamma_client.search_markets(query)
+            
+            # Filter out expired markets
+            markets = self._filter_active_markets(markets)
             
             # Limit results
             markets = markets[:min(limit, len(markets))]
@@ -233,7 +273,7 @@ class PolymarketToolkit(BaseToolkit):
         limit: int = 20
     ) -> MarketSearchResult:
         """
-        Get trending markets sorted by 24h volume
+        Get trending markets sorted by 24h volume (only active/future markets)
         
         Args:
             limit: Number of markets to return (default: 20, max: 100)
@@ -244,7 +284,14 @@ class PolymarketToolkit(BaseToolkit):
         await self._ensure_clients()
         
         try:
-            markets = await self.gamma_client.get_trending_markets(limit=limit)
+            # Request more markets to account for filtering
+            markets = await self.gamma_client.get_trending_markets(limit=limit * 2)
+            
+            # Filter out expired markets
+            markets = self._filter_active_markets(markets)
+            
+            # Limit to requested amount after filtering
+            markets = markets[:limit]
             
             formatted_markets = []
             for market in markets:
@@ -443,7 +490,7 @@ class PolymarketToolkit(BaseToolkit):
         limit: int = 20
     ) -> MarketSearchResult:
         """
-        Get most liquid markets (highest liquidity)
+        Get most liquid markets (highest liquidity, only active/future markets)
         
         Args:
             limit: Number of markets to return (default: 20)
@@ -454,7 +501,14 @@ class PolymarketToolkit(BaseToolkit):
         await self._ensure_clients()
         
         try:
-            markets = await self.gamma_client.get_liquidity_leaders(limit=limit)
+            # Request more markets to account for filtering
+            markets = await self.gamma_client.get_liquidity_leaders(limit=limit * 2)
+            
+            # Filter out expired markets
+            markets = self._filter_active_markets(markets)
+            
+            # Limit to requested amount after filtering
+            markets = markets[:limit]
             
             formatted_markets = []
             for market in markets:
