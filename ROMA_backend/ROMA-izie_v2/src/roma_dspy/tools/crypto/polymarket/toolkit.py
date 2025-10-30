@@ -9,9 +9,10 @@ Provides tools for accessing Polymarket prediction market data:
 - On-chain data via The Graph
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, TYPE_CHECKING
 import asyncio
 import logging
+import os
 import dspy
 
 from roma_dspy.tools.base import BaseToolkit
@@ -28,8 +29,11 @@ from .types import (
     MarketHolder
 )
 
-logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from roma_dspy.core.storage.file_storage import FileStorage
+
+logger = logging.getLogger(__name__)
 
 class PolymarketToolkit(BaseToolkit):
     """
@@ -39,23 +43,40 @@ class PolymarketToolkit(BaseToolkit):
     and on-chain data through multiple API endpoints.
     """
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        enabled: bool = True,
+        include_tools: Optional[List[str]] = None,
+        exclude_tools: Optional[List[str]] = None,
+        file_storage: Optional["FileStorage"] = None,
+        **config
+    ):
         """
         Initialize Polymarket Toolkit
         
         Args:
-            config: Configuration dictionary with:
+            enabled: Whether toolkit is enabled (from BaseToolkit)
+            include_tools: List of specific tools to include (from BaseToolkit)
+            exclude_tools: List of tools to exclude (from BaseToolkit)
+            file_storage: FileStorage instance if needed (from BaseToolkit)
+            **config: Additional configuration:
                 - timeout: API timeout in seconds (default: 30)
                 - cache_ttl: Cache TTL in seconds (default: 300)
                 - graph_api_key: The Graph API key for on-chain data
         """
-        super().__init__()
+        # Call BaseToolkit.__init__ with required parameters
+        super().__init__(
+            enabled=enabled,
+            include_tools=include_tools,
+            exclude_tools=exclude_tools,
+            file_storage=file_storage,
+            **config
+        )
         
-        # Get configuration
-        config = config or {}
+        # Get Polymarket-specific configuration
         self.timeout = config.get("timeout", 30)
         self.cache_ttl = config.get("cache_ttl", 300)
-        self.graph_api_key = config.get("graph_api_key")
+        self.graph_api_key = config.get("graph_api_key") or os.getenv("GRAPH_API_KEY")
         
         # Initialize clients as None (will be set up in _setup_dependencies)
         self.gamma_client = None
