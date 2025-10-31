@@ -65,7 +65,7 @@ class PolymarketToolkit(BaseToolkit):
                 - cache_ttl: Cache TTL in seconds (default: 300)
                 - graph_api_key: The Graph API key for on-chain data
         """
-        # Call BaseToolkit.__init__ with required parameters
+        
         super().__init__(
             enabled=enabled,
             include_tools=include_tools,
@@ -74,17 +74,17 @@ class PolymarketToolkit(BaseToolkit):
             **config
         )
         
-        # Get Polymarket-specific configuration
+       
         self.timeout = config.get("timeout", 30)
         self.cache_ttl = config.get("cache_ttl", 300)
         self.graph_api_key = config.get("graph_api_key") or os.getenv("GRAPH_API_KEY")
         
-        # Initialize clients as None (will be set up in _setup_dependencies)
+        
         self.gamma_client = None
         self.data_client = None
         self.subgraph_client = None
         
-        # Cache for API responses
+      
         self._cache = {}
         
         logger.info(f"Initialized PolymarketToolkit with timeout={self.timeout}")
@@ -97,7 +97,7 @@ class PolymarketToolkit(BaseToolkit):
         Note: Actual client initialization is deferred to _ensure_clients()
         to support async context managers properly.
         """
-        # Clients will be initialized lazily in _ensure_clients() due to async requirements
+    
         logger.info("PolymarketToolkit dependencies setup complete (lazy initialization)")
     
     def _initialize_tools(self) -> List[dspy.Tool]:
@@ -190,22 +190,22 @@ class PolymarketToolkit(BaseToolkit):
         for market in markets:
             end_date_str = market.get("endDate")
             if not end_date_str:
-                # If no end date, include it
+               
                 active_markets.append(market)
                 continue
             
             try:
-                # Parse ISO format date (e.g., "2025-12-31T12:00:00Z")
+            
                 end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
                 
-                # Only include if end date is in the future
+               
                 if end_date > now:
                     active_markets.append(market)
                 else:
                     logger.debug(f"Filtered out expired market: {market.get('question')} (ended {end_date_str})")
             except (ValueError, AttributeError) as e:
                 logger.warning(f"Could not parse end date '{end_date_str}': {e}")
-                # Include market if we can't parse the date (safer to include)
+         
                 active_markets.append(market)
         
         return active_markets
@@ -230,13 +230,13 @@ class PolymarketToolkit(BaseToolkit):
         try:
             markets = await self.gamma_client.search_markets(query)
             
-            # Filter out expired markets
+          
             markets = self._filter_active_markets(markets)
             
-            # Limit results
+           
             markets = markets[:min(limit, len(markets))]
             
-            # Format markets
+            
             formatted_markets = []
             for market in markets:
                 formatted_markets.append({
@@ -284,13 +284,13 @@ class PolymarketToolkit(BaseToolkit):
         await self._ensure_clients()
         
         try:
-            # Request more markets to account for filtering
+            
             markets = await self.gamma_client.get_trending_markets(limit=limit * 2)
             
-            # Filter out expired markets
+           
             markets = self._filter_active_markets(markets)
             
-            # Limit to requested amount after filtering
+           
             markets = markets[:limit]
             
             formatted_markets = []
@@ -501,13 +501,13 @@ class PolymarketToolkit(BaseToolkit):
         await self._ensure_clients()
         
         try:
-            # Request more markets to account for filtering
+  
             markets = await self.gamma_client.get_liquidity_leaders(limit=limit * 2)
             
-            # Filter out expired markets
+           
             markets = self._filter_active_markets(markets)
             
-            # Limit to requested amount after filtering
+           
             markets = markets[:limit]
             
             formatted_markets = []
