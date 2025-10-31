@@ -112,7 +112,7 @@ class PolymarketToolkit(BaseToolkit):
         """
         tools = []
         
-        # Search and discovery tools
+       
         tools.append(dspy.Tool(
             func=self.search_markets,
             name="search_markets"
@@ -134,7 +134,7 @@ class PolymarketToolkit(BaseToolkit):
             name="get_market_details"
         ))
         
-        # User and holder tracking
+     
         tools.append(dspy.Tool(
             func=self.get_user_positions,
             name="get_user_positions"

@@ -116,7 +116,7 @@ class PolymarketGammaClient:
             limit=limit,
             order_by="volume_24h",
             sort_by="desc",
-            closed=False  # Only open markets
+            closed=False
         )
     
     async def get_liquidity_leaders(self, limit: int = 20) -> List[Dict[str, Any]]:
@@ -125,7 +125,7 @@ class PolymarketGammaClient:
             limit=limit,
             order_by="liquidity",
             sort_by="desc",
-            closed=False  # Only open markets
+            closed=False
         )
 
 

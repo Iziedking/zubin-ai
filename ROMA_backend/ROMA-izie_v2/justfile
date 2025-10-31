@@ -1,6 +1,7 @@
 # ROMA-DSPy Justfile
 # Common development commands
 # Default recipe
+
 default:
     @just --list
 # Install dependencies
