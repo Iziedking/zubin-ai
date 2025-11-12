@@ -1,0 +1,75 @@
+# ==============================================================================
+ROMA_ENV=production
+ROMA_MAX_DEPTH=5
+ROMA_VERBOSE=false
+ROMA_ENABLE_LOGGING=true
+
+# ==============================================================================
+# Resilience Configuration
+# ==============================================================================
+ROMA_RETRY_ENABLED=true
+ROMA_MAX_RETRIES=3
+ROMA_RETRY_STRATEGY=exponential_backoff
+ROMA_CIRCUIT_BREAKER_ENABLED=true
+ROMA_FAILURE_THRESHOLD=5
+
+# ==============================================================================
+# Cache Configuration
+# ==============================================================================
+ROMA_CACHE_ENABLED=true
+ROMA_CACHE_DISK=true
+ROMA_CACHE_MEMORY=true
+DSPY_CACHE_DIR=.cache/dspy
+
+# ==============================================================================
+# Checkpoint Configuration
+# ==============================================================================
+ROMA_CHECKPOINT_ENABLED=true
+ROMA_CHECKPOINT_PATH=.checkpoints
+ROMA_MAX_CHECKPOINTS=10
+ROMA_CHECKPOINT_MAX_AGE_HOURS=24.0
+ROMA_CHECKPOINT_COMPRESS=true
+ROMA_CHECKPOINT_VERIFY=true
+
+# ==============================================================================
+# Logging Configuration - PRODUCTION
+# ==============================================================================
+LOG_LEVEL=INFO
+LOG_DIR=/tmp/logs
+LOG_CONSOLE_FORMAT=default
+LOG_FILE_FORMAT=detailed
+LOG_COLORIZE=false
+LOG_SERIALIZE=false
+LOG_ROTATION=100 MB
+LOG_RETENTION=30 days
+LOG_COMPRESSION=zip
+LOG_INTERCEPT_STDLIB=true
+LOG_BACKTRACE=true
+LOG_DIAGNOSE=false
+LOG_ENQUEUE=true
+
+# ==============================================================================
+# Observability Configuration (MLflow) - FOR DOCKER
+# ==============================================================================
+MLFLOW_ENABLED=true
+ROMA_DISABLE_MLFLOW_SPANS=false
+
+# mflow
+MLFLOW_TRACKING_URI=http://mlflow:5000
+MLFLOW_EXPERIMENT=ROMA-DSPy-Production
+MLFLOW_PORT=5000
+
+# MLflow artifact storage (MinIO)
+MLFLOW_DEFAULT_ARTIFACT_ROOT=s3://mlflow
+
+# ==============================================================================
+# Docker Configuration (Port Mappings)
+# ==============================================================================
+POSTGRES_PORT=5432
+MLFLOW_PORT=5000
+
+# ==============================================================================
+# Security Configuration (GENERATE RANDOM SECRETS!)
+# ==============================================================================
+JWT_SECRET=5ce467efb8ad0b9e72b21d82d292c8762433810c83681fa85c556f09ce8b0610
+API_KEY=c35dbf26cb93be56fe5df6853cb0881815a1ed0db56011812bcd3b0f8437ee6b

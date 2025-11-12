@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Header
 from roma_dspy.core.storage.postgres_storage import PostgresStorage
 from roma_dspy.config.manager import ConfigManager
-
+from roma_dspy.api.db_auth import verify_api_key_from_db
 
 # ============================================================================
 # Global State (will be injected via app.state in main.py)
@@ -98,49 +98,20 @@ async def verify_checkpoint_exists(
     return checkpoint_id
 
 
-async def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> Optional[str]:
+async def verify_api_key(client_name: str = Depends(verify_api_key_from_db)) -> str:
     """
-    Verify API key if authentication is enabled.
-
-    Set REQUIRE_AUTH=true and API_KEY=your-key in environment to enable.
-
+    Verify API key from database.
+    
     Args:
-        x_api_key: API key from X-API-Key header
-
+        client_name: Client name returned from database auth
+    
     Returns:
-        API key if valid
-
+        Client name if valid
+    
     Raises:
-        HTTPException: If authentication is required but key is invalid
+        HTTPException: If authentication fails
     """
-    require_auth = os.getenv("REQUIRE_AUTH", "false").lower() == "true"
-
-    if not require_auth:
-        # Authentication is disabled
-        return x_api_key
-
-    # Authentication is enabled - verify key
-    expected_key = os.getenv("API_KEY")
-
-    if not expected_key:
-        raise HTTPException(
-            status_code=500,
-            detail="Server misconfigured: REQUIRE_AUTH=true but API_KEY not set"
-        )
-
-    if not x_api_key:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required. Please provide X-API-Key header."
-        )
-
-    if x_api_key != expected_key:
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid API key"
-        )
-
-    return x_api_key
+    return client_name
 
 
 def validate_max_depth(max_depth: int) -> int:

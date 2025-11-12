@@ -105,6 +105,41 @@ class ExecutionService:
         self._background_tasks: Dict[str, asyncio.Task] = {}
 
         logger.info("ExecutionService initialized")
+    
+
+    def _config_to_dict(self, config: Any) -> Dict[str, Any]:
+        """
+        Convert ROMAConfig to JSON-serializable dictionary.
+        
+        Args:
+            config: ROMAConfig instance
+            
+        Returns:
+            JSON-serializable dictionary representation
+        """
+        import json
+        from dataclasses import asdict, is_dataclass
+        
+        def serialize(obj):
+            """Recursively serialize dataclass objects."""
+            if is_dataclass(obj):
+                return {k: serialize(v) for k, v in asdict(obj).items()}
+            elif isinstance(obj, dict):
+                return {k: serialize(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [serialize(item) for item in obj]
+            elif hasattr(obj, 'dict'):
+                return serialize(obj.dict())
+            elif hasattr(obj, 'model_dump'):
+                return serialize(obj.model_dump())
+            else:
+                try:
+                    json.dumps(obj)
+                    return obj
+                except (TypeError, ValueError):
+                    return str(obj)
+        
+        return serialize(config)
 
     async def start_execution(
         self,
@@ -140,7 +175,7 @@ class ExecutionService:
             execution_id=execution_id,
             initial_goal=goal,
             max_depth=max_depth,
-            config=config.model_dump() if hasattr(config, 'model_dump') else dict(config),
+            config=self._config_to_dict(config),
             metadata=metadata or {}
         )
 
@@ -179,10 +214,11 @@ class ExecutionService:
 
             # Create solver
             solver = RecursiveSolver(
-                config=config,
-                storage=self.storage,
-                execution_id=execution_id
-            )
+   		 config=config,
+    		 max_depth=max_depth,
+   		 enable_logging=True,
+   		 enable_checkpoints=True
+	    )
 
             # Execute
             logger.info(f"Executing {execution_id}")

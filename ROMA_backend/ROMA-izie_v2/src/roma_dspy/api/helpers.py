@@ -35,6 +35,7 @@ def execution_to_response(execution: Execution) -> ExecutionResponse:
         updated_at=execution.updated_at,
         config=execution.config,
         metadata=execution.execution_metadata,
+	final_result=execution.final_result,
     )
 
 

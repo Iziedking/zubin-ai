@@ -24,6 +24,7 @@ from roma_dspy.api.dependencies import (
     get_storage,
     verify_execution_exists,
     validate_pagination,
+    verify_api_key,
 )
 from roma_dspy.core.storage.postgres_storage import PostgresStorage
 from roma_dspy.core.engine.dag import TaskDAG
@@ -35,7 +36,8 @@ router = APIRouter()
 @router.post("/executions", response_model=ExecutionResponse, status_code=202)
 async def create_execution(
     request: Request,
-    solve_request: SolveRequest
+    solve_request: SolveRequest,
+    client_name: str = Depends(verify_api_key)
 ) -> ExecutionResponse:
     """
     Start a new task execution.

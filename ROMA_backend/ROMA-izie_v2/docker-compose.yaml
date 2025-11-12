@@ -68,7 +68,7 @@ services:
       "
     networks:
       - roma-network
-      
+
   # ROMA-DSPy API Server
   roma-api:
     build:
@@ -103,6 +103,7 @@ services:
       - ./src:/app/src
       - ./config:/app/config:ro
       - ./prompt_optimization:/app/prompt_optimization
+
 
       # Persistent data
       - ./logs:/app/logs

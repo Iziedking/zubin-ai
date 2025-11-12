@@ -81,6 +81,7 @@ class ExecutionResponse(BaseModel):
     updated_at: datetime
     config: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any]
+    final_result: Optional[Dict[str, Any]] = None
 
 
 class ExecutionDetailResponse(ExecutionResponse):
