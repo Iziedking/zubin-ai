@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 from roma_dspy.api.schemas import (
     ExecutionResponse,
     ExecutionDetailResponse,
-    FinalResultResponse,
     TaskNodeResponse,
     CheckpointResponse,
     TaskTraceResponse,
@@ -24,13 +23,6 @@ from roma_dspy.core.signatures.base_models.task_node import TaskNode
 
 def execution_to_response(execution: Execution) -> ExecutionResponse:
     """Convert Execution model to ExecutionResponse schema."""
-    final_result = None
-    if execution.final_result:
-        final_result = FinalResultResponse(
-            result=execution.final_result.get("result"),
-            status=execution.final_result.get("status", "UNKNOWN")
-        )
-    
     return ExecutionResponse(
         execution_id=execution.execution_id,
         status=execution.status,
@@ -41,8 +33,9 @@ def execution_to_response(execution: Execution) -> ExecutionResponse:
         failed_tasks=execution.failed_tasks,
         created_at=execution.created_at,
         updated_at=execution.updated_at,
-        metadata=execution.execution_metadata or {},
-        final_result=final_result,
+        config=execution.config,
+        metadata=execution.execution_metadata,
+	final_result=execution.final_result,
     )
 
 
@@ -66,14 +59,17 @@ async def execution_to_detail_response(
 
     statistics = None
 
+    # Try to get latest checkpoint first
     if storage:
         try:
             checkpoint = await storage.get_latest_checkpoint(execution.execution_id, valid_only=True)
             if checkpoint and checkpoint.root_dag:
+                # Convert DAGSnapshot model to dict if needed
                 dag_snapshot = checkpoint.root_dag
                 if hasattr(dag_snapshot, 'model_dump'):
                     dag_snapshot = dag_snapshot.model_dump(mode="python")
 
+                # Extract statistics from checkpoint DAG snapshot
                 if 'statistics' in dag_snapshot:
                     stats_data = dag_snapshot['statistics']
                     statistics = DAGStatisticsResponse(
@@ -89,6 +85,7 @@ async def execution_to_detail_response(
         except Exception:
             pass
 
+    # Fallback to live DAG if checkpoint not available
     if not statistics and dag:
         stats = dag.get_statistics()
         statistics = DAGStatisticsResponse(
@@ -239,11 +236,13 @@ def build_task_tree(tasks: List[TaskNode]) -> Dict[str, Any]:
         }
 
         if task.parent_id and task.parent_id in task_map:
+            # Find parent in tree and add as child
             parent_id = task.parent_id
             if parent_id not in task_tree:
                 task_tree[parent_id] = {'children': []}
             task_tree[parent_id]['children'].append(task_dict)
         else:
+            # Root task
             root_tasks.append(task_dict)
 
         task_tree[task.task_id] = task_dict
@@ -284,7 +283,7 @@ def sanitize_metadata(metadata: Dict[str, Any], max_depth: int = 3) -> Dict[str,
         if isinstance(obj, dict):
             return {k: _sanitize(v, depth + 1) for k, v in obj.items()}
         elif isinstance(obj, list):
-            return [_sanitize(item, depth + 1) for item in obj[:100]]
+            return [_sanitize(item, depth + 1) for item in obj[:100]]  # Limit list size
         else:
             return obj
 

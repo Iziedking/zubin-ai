@@ -56,12 +56,16 @@ async def create_execution(
         )
 
     try:
+        # Start execution
         execution_id = await app_state.execution_service.start_execution(
             goal=solve_request.goal,
             max_depth=solve_request.max_depth,
+            config_profile=solve_request.config_profile,
+            config_overrides=solve_request.config_overrides,
             metadata=solve_request.metadata
         )
 
+        # Get execution record
         storage = app_state.storage
         execution = await storage.get_execution(execution_id)
 
@@ -99,17 +103,21 @@ async def list_executions(
     Returns:
         List of executions with pagination info
     """
+    # Validate pagination
     offset, limit = validate_pagination(offset, limit)
 
     try:
+        # Get executions from storage
         executions = await storage.list_executions(
             status=status,
             offset=offset,
             limit=limit
         )
 
+        # Get total count (without pagination)
         total = await storage.count_executions(status=status)
 
+        # Convert to response schemas
         execution_responses = [
             execution_to_response(execution)
             for execution in executions
@@ -153,6 +161,7 @@ async def get_execution(
                 detail=f"Execution {execution_id} not found"
             )
 
+        # Convert to detail response (includes DAG snapshot from checkpoints)
         return await execution_to_detail_response(execution, storage=storage)
 
     except HTTPException:
@@ -190,6 +199,7 @@ async def get_execution_status(
         )
 
     try:
+        # Get status (uses cache)
         status_data = await app_state.execution_service.get_execution_status(execution_id)
 
         if not status_data:
@@ -198,6 +208,7 @@ async def get_execution_status(
                 detail=f"Execution {execution_id} not found"
             )
 
+        # Get execution from storage for progress calculation
         storage = app_state.storage
         execution = await storage.get_execution(execution_id)
 
@@ -207,16 +218,20 @@ async def get_execution_status(
                 detail=f"Execution {execution_id} not found"
             )
 
+        # Calculate progress
         progress = calculate_progress(execution)
 
+        # Get current task from checkpoint DAG snapshot
         current_task_id = None
         current_task_goal = None
 
         dag_data = None
+        # Read from checkpoint (primary and only source post-migration)
         try:
             checkpoint = await storage.get_latest_checkpoint(execution_id, valid_only=True)
             if checkpoint and checkpoint.root_dag:
                 dag_data = checkpoint.root_dag
+                # Convert DAGSnapshot model to dict if needed
                 if hasattr(dag_data, 'model_dump'):
                     dag_data = dag_data.model_dump(mode="python")
         except Exception as e:
@@ -244,7 +259,7 @@ async def get_execution_status(
             current_task_goal=current_task_goal,
             completed_tasks=execution.completed_tasks,
             total_tasks=execution.total_tasks,
-            estimated_remaining_seconds=None,
+            estimated_remaining_seconds=None,  # Could be calculated with timing data
             last_updated=execution.updated_at
         )
 
@@ -281,6 +296,7 @@ async def cancel_execution(
         )
 
     try:
+        # Cancel execution
         cancelled = await app_state.execution_service.cancel_execution(execution_id)
 
         if not cancelled:
@@ -289,6 +305,7 @@ async def cancel_execution(
                 detail=f"Execution {execution_id} is not running (cannot cancel)"
             )
 
+        # Get updated execution
         storage = app_state.storage
         execution = await storage.get_execution(execution_id)
 
@@ -333,6 +350,7 @@ async def get_execution_data(
     Returns:
         Consolidated execution data with tasks, agent executions, spans, and metrics
     """
+    # Verify execution exists in storage
     execution = await storage.get_execution(execution_id)
     if not execution:
         raise HTTPException(
@@ -340,16 +358,22 @@ async def get_execution_data(
             detail=f"Execution {execution_id} not found"
         )
 
+    # Get MLflow tracking URI from environment
+    # Docker sets MLFLOW_TRACKING_URI=http://mlflow:5000
     import os
     mlflow_tracking_uri = os.getenv('MLFLOW_TRACKING_URI', 'http://127.0.0.1:5000')
 
     try:
+        # Import ExecutionDataService here to avoid circular dependencies
         from roma_dspy.core.services.execution_data_service import ExecutionDataService
 
+        # Create service instance
+        # Searches all experiments by execution_id tag (no experiment name needed)
         service = ExecutionDataService(
             mlflow_tracking_uri=mlflow_tracking_uri,
         )
 
+        # Get consolidated data
         data = service.get_execution_data(execution_id)
 
         return ExecutionDataResponse(**data)

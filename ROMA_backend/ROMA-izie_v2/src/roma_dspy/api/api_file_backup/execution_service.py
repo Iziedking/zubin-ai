@@ -41,6 +41,7 @@ class ExecutionCache:
         age = (datetime.now(timezone.utc) - timestamp).total_seconds()
 
         if age > self.ttl_seconds:
+            # Expired
             del self._cache[execution_id]
             del self._timestamps[execution_id]
             return None
@@ -100,14 +101,52 @@ class ExecutionService:
         self.config_manager = config_manager
         self.cache = ExecutionCache(ttl_seconds=cache_ttl_seconds)
 
+        # Track background tasks
         self._background_tasks: Dict[str, asyncio.Task] = {}
 
         logger.info("ExecutionService initialized")
+    
+
+    def _config_to_dict(self, config: Any) -> Dict[str, Any]:
+        """
+        Convert ROMAConfig to JSON-serializable dictionary.
+        
+        Args:
+            config: ROMAConfig instance
+            
+        Returns:
+            JSON-serializable dictionary representation
+        """
+        import json
+        from dataclasses import asdict, is_dataclass
+        
+        def serialize(obj):
+            """Recursively serialize dataclass objects."""
+            if is_dataclass(obj):
+                return {k: serialize(v) for k, v in asdict(obj).items()}
+            elif isinstance(obj, dict):
+                return {k: serialize(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [serialize(item) for item in obj]
+            elif hasattr(obj, 'dict'):
+                return serialize(obj.dict())
+            elif hasattr(obj, 'model_dump'):
+                return serialize(obj.model_dump())
+            else:
+                try:
+                    json.dumps(obj)
+                    return obj
+                except (TypeError, ValueError):
+                    return str(obj)
+        
+        return serialize(config)
 
     async def start_execution(
         self,
         goal: str,
         max_depth: int = 2,
+        config_profile: Optional[str] = None,
+        config_overrides: Optional[Dict[str, Any]] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
@@ -116,6 +155,8 @@ class ExecutionService:
         Args:
             goal: Task goal to decompose and execute
             max_depth: Maximum recursion depth
+            config_profile: Configuration profile name
+            config_overrides: Configuration overrides
             metadata: Additional metadata
 
         Returns:
@@ -123,16 +164,22 @@ class ExecutionService:
         """
         execution_id = str(uuid4())
 
-        config = self.config_manager.load_config()
+        # Load configuration
+        config = self.config_manager.load_config(
+            profile=config_profile,
+            overrides=config_overrides or {}
+        )
 
+        # Create execution record
         await self.storage.create_execution(
             execution_id=execution_id,
             initial_goal=goal,
             max_depth=max_depth,
-            config={},
+            config=self._config_to_dict(config),
             metadata=metadata or {}
         )
 
+        # Start background task
         task = asyncio.create_task(
             self._run_execution(execution_id, goal, max_depth, config)
         )
@@ -158,22 +205,27 @@ class ExecutionService:
             config: Configuration object
         """
         try:
+            # Update status to running
             await self.storage.update_execution(
                 execution_id=execution_id,
                 status=ExecutionStatus.RUNNING.value
             )
             self.cache.invalidate(execution_id)
 
+            # Create solver
             solver = RecursiveSolver(
-                 config=config,
-                 max_depth=max_depth,
-                 enable_logging=True,
-                 enable_checkpoints=True
-            )
+   		 config=config,
+    		 max_depth=max_depth,
+   		 enable_logging=True,
+   		 enable_checkpoints=True
+	    )
 
+            # Execute
             logger.info(f"Executing {execution_id}")
             result = await solver.async_solve(goal, depth=0)
 
+            # DAG snapshot now saved via checkpoints (see checkpoint_manager)
+            # Update status to completed with final result
             await self.storage.update_execution(
                 execution_id=execution_id,
                 status=ExecutionStatus.COMPLETED.value,
@@ -186,9 +238,11 @@ class ExecutionService:
         except Exception as e:
             logger.error(f"Execution {execution_id} failed: {e}")
 
+            # Update status to failed - merge error info with existing metadata
             try:
                 execution = await self.storage.get_execution(execution_id)
 
+                # Safely merge metadata
                 existing_metadata = {}
                 if execution and hasattr(execution, 'execution_metadata') and execution.execution_metadata:
                     existing_metadata = execution.execution_metadata if isinstance(execution.execution_metadata, dict) else {}
@@ -211,8 +265,10 @@ class ExecutionService:
                 )
 
         finally:
+            # Cleanup background task reference
             self._background_tasks.pop(execution_id, None)
 
+            # Periodic cleanup if too many completed tasks
             if len(self._background_tasks) > 100:
                 await self.cleanup_completed_tasks()
 
@@ -226,10 +282,12 @@ class ExecutionService:
         Returns:
             Execution status dictionary or None if not found
         """
+        # Check cache first
         cached = self.cache.get(execution_id)
         if cached:
             return cached
 
+        # Fetch from storage
         execution = await self.storage.get_execution(execution_id)
         if not execution:
             return None
@@ -245,6 +303,7 @@ class ExecutionService:
             "updated_at": execution.updated_at.isoformat(),
         }
 
+        # Cache it
         self.cache.set(execution_id, status_data)
 
         return status_data
@@ -264,6 +323,7 @@ class ExecutionService:
             logger.warning(f"No running task found for execution {execution_id}")
             return False
 
+        # Cancel the task
         task.cancel()
 
         try:
@@ -271,12 +331,14 @@ class ExecutionService:
         except asyncio.CancelledError:
             logger.info(f"Execution {execution_id} cancelled")
 
+        # Update status
         await self.storage.update_execution(
             execution_id=execution_id,
             status=ExecutionStatus.CANCELLED.value
         )
         self.cache.invalidate(execution_id)
 
+        # Cleanup
         self._background_tasks.pop(execution_id, None)
 
         return True
@@ -316,6 +378,7 @@ class ExecutionService:
         """Shutdown service and cancel all running tasks."""
         logger.info("Shutting down ExecutionService")
 
+        # Cancel all running tasks
         for exec_id, task in list(self._background_tasks.items()):
             if not task.done():
                 logger.info(f"Cancelling execution {exec_id}")
@@ -326,6 +389,7 @@ class ExecutionService:
                 except asyncio.CancelledError:
                     pass
 
+        # Clear cache
         self.cache.clear()
 
         logger.info("ExecutionService shutdown complete")

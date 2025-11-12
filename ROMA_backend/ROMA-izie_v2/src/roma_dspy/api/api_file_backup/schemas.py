@@ -6,11 +6,19 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
+
+
+# ============================================================================
+# Request Schemas
+# ============================================================================
+
 class SolveRequest(BaseModel):
     """Request schema for starting a new task execution."""
 
     goal: str = Field(..., min_length=1, description="Task goal to decompose and execute")
     max_depth: int = Field(default=2, ge=0, le=10, description="Maximum recursion depth")
+    config_profile: Optional[str] = Field(default=None, description="Configuration profile name")
+    config_overrides: Optional[Dict[str, Any]] = Field(default=None, description="Configuration overrides")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
 
@@ -27,6 +35,10 @@ class ConfigUpdateRequest(BaseModel):
     profile: Optional[str] = Field(default=None, description="Configuration profile name")
     overrides: Dict[str, Any] = Field(..., description="Configuration overrides")
 
+
+# ============================================================================
+# Response Schemas
+# ============================================================================
 
 class TaskNodeResponse(BaseModel):
     """Response schema for a single task node."""
@@ -55,13 +67,6 @@ class DAGStatisticsResponse(BaseModel):
     is_complete: bool
 
 
-class FinalResultResponse(BaseModel):
-    """Response schema for final execution result."""
-
-    result: Optional[str] = None
-    status: str
-
-
 class ExecutionResponse(BaseModel):
     """Response schema for execution metadata."""
 
@@ -74,8 +79,9 @@ class ExecutionResponse(BaseModel):
     failed_tasks: int
     created_at: datetime
     updated_at: datetime
+    config: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any]
-    final_result: Optional[FinalResultResponse] = None
+    final_result: Optional[Dict[str, Any]] = None
 
 
 class ExecutionDetailResponse(ExecutionResponse):
@@ -178,6 +184,8 @@ class ErrorResponse(BaseModel):
     timestamp: datetime
 
 
+
+
 class MetricsResponse(BaseModel):
     """Response schema for execution metrics."""
 
@@ -194,7 +202,7 @@ class StatusPollingResponse(BaseModel):
 
     execution_id: str
     status: str
-    progress: float
+    progress: float  # 0.0 to 1.0
     current_task_id: Optional[str] = None
     current_task_goal: Optional[str] = None
     completed_tasks: int
@@ -212,7 +220,7 @@ class ExecutionDataResponse(BaseModel):
     """
 
     execution_id: str
-    tasks: List[Dict[str, Any]]
-    summary: Dict[str, Any]
-    traces: List[Dict[str, Any]]
-    fallback_spans: List[Dict[str, Any]]
+    tasks: List[Dict[str, Any]]  # Task entries with agent_executions
+    summary: Dict[str, Any]  # Aggregated metrics
+    traces: List[Dict[str, Any]]  # Trace metadata
+    fallback_spans: List[Dict[str, Any]]  # Spans without task_id
