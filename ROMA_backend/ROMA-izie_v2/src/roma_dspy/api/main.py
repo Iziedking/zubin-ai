@@ -16,7 +16,7 @@ from roma_dspy.api.dependencies import init_dependencies
 from roma_dspy.config.manager import ConfigManager
 from roma_dspy.core.storage.postgres_storage import PostgresStorage
 from roma_dspy.logging_config import configure_from_config
-
+from roma_dspy.api.api_reveal import router as reveal_router
 
 # ============================================================================
 # Application State
@@ -187,6 +187,7 @@ def create_app(enable_rate_limit: bool = True) -> FastAPI:
     app.include_router(checkpoints.router, prefix="/api/v1", tags=["checkpoints"])
     app.include_router(metrics.router, prefix="/api/v1", tags=["metrics"])
     app.include_router(traces.router, prefix="/api/v1", tags=["traces"])
+    app.include_router(reveal_router)
 
     # Global exception handler
     @app.exception_handler(Exception)
