@@ -49,7 +49,7 @@ fi
 echo "Creating API key for: $CLIENT_NAME ($CLIENT_EMAIL)"
 echo ""
 
-API_KEY_OUTPUT=$($MANAGE_KEYS_SCRIPT create production_user 2>&1)
+API_KEY_OUTPUT=$($MANAGE_KEYS_SCRIPT create "$CLIENT_NAME" 2>&1)
 
 API_KEY=$(echo "$API_KEY_OUTPUT" | grep -oP '[a-f0-9]{64}' | head -1)
 

@@ -11,23 +11,6 @@ agents:
     agent_config:
       max_subtasks: 15  # Override default 10
 
-  executor:
-    toolkits:
-      - class_name: PolymarketToolkit
-        enabled: true
-        toolkit_config:
-          timeout: 30
-          cache_ttl: 300
-      
-      - class_name: SerperToolkit
-        enabled: true
-        toolkit_config:
-          max_results: 10
-      
-      - class_name: CalculatorToolkit
-        enabled: true
-
-
 # Runtime configuration overrides
 runtime:
   verbose: ${oc.env:ROMA_VERBOSE,false}

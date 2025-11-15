@@ -59,7 +59,8 @@ async def create_execution(
         execution_id = await app_state.execution_service.start_execution(
             goal=solve_request.goal,
             max_depth=solve_request.max_depth,
-            metadata=solve_request.metadata
+            metadata=solve_request.metadata,
+	    client_name=client_name
         )
 
         storage = app_state.storage

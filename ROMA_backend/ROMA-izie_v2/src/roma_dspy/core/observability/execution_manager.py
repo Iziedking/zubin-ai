@@ -102,17 +102,11 @@ class ObservabilityManager:
             depth: Current recursion depth
             execution_mode: "recursive" or "event_driven"
         """
-        # Initialize Postgres storage if available
         if self.postgres_storage and not self.postgres_storage._local.initialized:
             await self._initialize_postgres()
 
-        # Configure DSPy settings with execution_id for trace correlation
         self._configure_dspy_tracing(dag.execution_id)
-
-        # Create execution record in Postgres
         await self._create_execution_record(task, dag, config, depth, execution_mode)
-
-        # Set execution context for LM trace persistence
         self._setup_trace_context(dag.execution_id)
 
     async def finalize_execution(
@@ -136,10 +130,8 @@ class ObservabilityManager:
             return
 
         try:
-            # Import types here to avoid circular dependency
             from roma_dspy.types import TaskStatus, ExecutionStatus
 
-            # DAG snapshot now saved via checkpoints (see checkpoint_manager)
             await self.postgres_storage.update_execution(
                 execution_id=dag.execution_id,
                 status=ExecutionStatus.COMPLETED.value if result.status == TaskStatus.COMPLETED else ExecutionStatus.FAILED.value,
@@ -172,8 +164,6 @@ class ObservabilityManager:
                 f"Database connection URL: {self.postgres_storage.config.connection_url}\n"
                 "This is a critical error. Execution cannot proceed without database connectivity."
             )
-            # Re-raise: If Postgres is enabled but can't be initialized, fail immediately
-            # This prevents FK violations from traces trying to insert with non-existent execution_id
             raise RuntimeError(
                 f"PostgreSQL initialization failed: {e}. "
                 "Check database connectivity and configuration."
@@ -191,10 +181,8 @@ class ObservabilityManager:
         """
         import threading
 
-        # Get current thread ID for thread-safe configuration
         current_thread_id = threading.get_ident()
 
-        # Check if we need to configure (skip if already configured in this thread)
         if (hasattr(dspy.settings, '_roma_execution_id') and
             dspy.settings._roma_execution_id == execution_id and
             hasattr(dspy.settings, '_roma_thread_id') and
@@ -203,23 +191,16 @@ class ObservabilityManager:
             return
 
         try:
-            # Configure DSPy with tracing and token usage tracking enabled
-            # BUG FIX: trace must be a list, not a boolean (DSPy calls len(trace))
-            # See: https://github.com/stanfordnlp/dspy/issues/377
-            # Enable track_usage to capture token metrics via get_lm_usage()
             if hasattr(dspy.settings, 'configure'):
                 try:
                     dspy.settings.configure(trace=[], track_usage=True)
                 except RuntimeError as e:
-                    # Thread-local configuration error - this is expected in worker threads
-                    # DSPy parallelizer creates worker threads that can't reconfigure
                     error_msg = str(e).lower()
                     if 'thread' in error_msg and 'configured' in error_msg:
                         logger.debug(
                             f"Skipping DSPy reconfiguration in worker thread {current_thread_id} "
                             f"(already configured by main thread). This is expected."
                         )
-                        # Still try to set custom attributes (these are thread-local)
                         try:
                             dspy.settings.execution_id = execution_id
                             dspy.settings._roma_execution_id = execution_id
@@ -230,18 +211,14 @@ class ObservabilityManager:
                     else:
                         raise
 
-            # Set execution_id as custom attribute
             dspy.settings.execution_id = execution_id
             dspy.settings._roma_execution_id = execution_id
             dspy.settings._roma_thread_id = current_thread_id
 
             logger.debug(f"Configured DSPy settings with execution_id: {execution_id[:8]} in thread {current_thread_id}")
 
-            # PHASE 1: Set session metadata for trace grouping
-            # This groups ALL traces (including DSPy autolog) by execution_id
             if MLFLOW_AVAILABLE:
                 try:
-                    # Check if there's an active trace before trying to update
                     if hasattr(mlflow, 'get_current_active_span') and mlflow.get_current_active_span():
                         mlflow.update_current_trace(metadata={
                             "mlflow.trace.session": execution_id,
@@ -249,20 +226,15 @@ class ObservabilityManager:
                         })
                         logger.info(f"✓ Set MLflow session metadata for execution: {execution_id[:8]}")
                     else:
-                        # No active trace yet - will be set when first span is created
                         logger.debug(f"No active MLflow trace yet for {execution_id[:8]}, metadata will be set later")
                 except AttributeError as e:
-                    # MLflow version too old (< 3.0) - missing update_current_trace
                     logger.debug(f"MLflow session metadata not available (requires MLflow 3.0+): {e}")
                 except Exception as e:
-                    # Non-fatal: session grouping is optional enhancement
                     logger.debug(f"Could not set MLflow session metadata: {e}")
 
         except (AttributeError, TypeError) as e:
-            # DSPy API may not support custom kwargs - log warning but continue
             logger.debug(f"DSPy settings configuration partial: {e}. Continuing without full DSPy integration.")
 
-            # Still set execution_id as attribute if possible
             try:
                 dspy.settings.execution_id = execution_id
                 dspy.settings._roma_execution_id = execution_id
@@ -271,7 +243,6 @@ class ObservabilityManager:
                 logger.debug("Could not set execution_id on dspy.settings")
 
         except Exception as e:
-            # Unexpected error - log but don't fail execution
             logger.debug(f"Unexpected error configuring DSPy settings: {e}. Continuing without DSPy integration.")
 
     async def _create_execution_record(
@@ -283,7 +254,11 @@ class ObservabilityManager:
         execution_mode: str
     ) -> None:
         """
-        Create execution record in PostgreSQL.
+        Create execution record in PostgreSQL if it doesn't already exist.
+
+        Checks for existing execution record first to support dual entry points:
+        - API layer: ExecutionService creates record before solver
+        - Direct solver: ObservabilityManager creates record
 
         Args:
             task: Task being executed
@@ -298,9 +273,6 @@ class ObservabilityManager:
         if not self.postgres_storage:
             return
 
-        # Defense in depth: Verify postgres_storage is initialized in current thread
-        # This should never trigger if _initialize_postgres() is working correctly,
-        # but provides a clear error message if initialization was somehow skipped
         if not self.postgres_storage._local.initialized:
             raise RuntimeError(
                 f"PostgresStorage exists but is not initialized in current thread. "
@@ -309,12 +281,18 @@ class ObservabilityManager:
             )
 
         try:
-            # Extract goal from task
+            existing_execution = await self.postgres_storage.get_execution(dag.execution_id)
+            
+            if existing_execution:
+                logger.debug(
+                    f"Execution record {dag.execution_id} already exists "
+                    f"(status: {existing_execution.status}). Skipping creation."
+                )
+                return
+
             from roma_dspy.core.signatures import TaskNode
 
             initial_goal = task.goal if isinstance(task, TaskNode) else str(task)
-
-            # Serialize config using ROMAConfig.to_dict() method
             config_dict = config.to_dict() if config else {}
 
             await self.postgres_storage.create_execution(
@@ -329,8 +307,6 @@ class ObservabilityManager:
                 }
             )
 
-            # Verify execution record was committed and is readable
-            # This prevents FK violations in LM traces
             execution = await self.postgres_storage.get_execution(dag.execution_id)
             if not execution:
                 raise RuntimeError(
@@ -341,7 +317,6 @@ class ObservabilityManager:
             logger.debug(f"Created and verified execution record: {dag.execution_id}")
 
         except Exception as e:
-            # Check if this is an event loop error from worker thread
             error_str = str(e).lower()
             if "event loop" in error_str or "different loop" in error_str:
                 logger.warning(
@@ -349,13 +324,9 @@ class ObservabilityManager:
                     "This is expected when running in DSPy's ParallelExecutor. "
                     "Worker threads cannot share database connections across event loops."
                 )
-                # Non-fatal in worker threads: The task can still complete, just without persistence
                 return
             else:
-                # Other errors are critical
                 logger.error(f"Failed to create execution record in Postgres: {e}")
-                # Re-raise: execution record is critical for FK constraints
-                # LM traces, task traces depend on this record existing
                 raise
 
     def _setup_trace_context(self, execution_id: str) -> None:

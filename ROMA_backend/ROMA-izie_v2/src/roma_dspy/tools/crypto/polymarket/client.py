@@ -98,7 +98,9 @@ class PolymarketGammaClient:
             params = {
                 "category": category,
                 "limit": 100,
-                "closed": "true" if closed else "false"
+                "closed": "true" if closed else "false",
+                "order_by": "volume_24h",
+                "sort_by": "desc"
             }
             response = await self.client.get(
                 f"{self.BASE_URL}/markets",
@@ -108,6 +110,49 @@ class PolymarketGammaClient:
             return response.json()
         except httpx.HTTPError as e:
             logger.error(f"Error fetching {category} markets: {e}")
+            return []
+    
+    async def search_in_category(
+        self,
+        query: str,
+        category: str,
+        limit: int = 50,
+        closed: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        Search within a specific category using local filtering.
+        More reliable than API search for specific topics.
+        """
+        try:
+            all_markets = await self.get_markets_by_category(category, closed=closed)
+            
+            if not all_markets:
+                return []
+            
+            query_lower = query.lower()
+            query_terms = query_lower.split()
+            
+            scored_markets = []
+            for market in all_markets:
+                question = market.get('question', '').lower()
+                description = market.get('description', '').lower()
+                
+                score = 0
+                for term in query_terms:
+                    if term in question:
+                        score += 10
+                    if term in description:
+                        score += 5
+                
+                if score > 0:
+                    scored_markets.append((score, market))
+            
+            scored_markets.sort(key=lambda x: x[0], reverse=True)
+            
+            return [market for score, market in scored_markets[:limit]]
+            
+        except Exception as e:
+            logger.error(f"Error searching in category {category}: {e}")
             return []
     
     async def get_trending_markets(self, limit: int = 20) -> List[Dict[str, Any]]:

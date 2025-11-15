@@ -57,6 +57,7 @@ class Execution(Base):
     execution_metadata: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     dag_snapshot: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     final_result: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    client_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Relationships
     checkpoints: Mapped[List["Checkpoint"]] = relationship(

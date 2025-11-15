@@ -192,7 +192,8 @@ class PostgresStorage:
         initial_goal: str,
         max_depth: int,
         config: Optional[Dict[str, Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+	client_name: Optional[str] = None
     ) -> Execution:
         """Create new execution record.
 
@@ -216,7 +217,8 @@ class PostgresStorage:
                 initial_goal=initial_goal,
                 max_depth=max_depth,
                 config=config or {},
-                execution_metadata=metadata or {}
+                execution_metadata=metadata or {},
+		client_name=client_name
             )
             session.add(execution)
             await session.flush()

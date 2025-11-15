@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 class PolymarketToolkit(BaseToolkit):
     """
     Polymarket Toolkit for accessing prediction market data
@@ -43,6 +44,32 @@ class PolymarketToolkit(BaseToolkit):
     Provides comprehensive access to Polymarket markets, prices, positions,
     and on-chain data through multiple API endpoints.
     """
+    
+    CATEGORY_KEYWORDS = {
+        "crypto": [
+            "bitcoin", "btc", "ethereum", "eth", "crypto", "cryptocurrency",
+            "solana", "sol", "cardano", "ada", "xrp", "ripple", "dogecoin",
+            "doge", "polygon", "matic", "avalanche", "avax", "chainlink",
+            "link", "polkadot", "dot", "litecoin", "ltc", "monero", "xmr",
+            "tether", "usdt", "usdc", "stablecoin", "defi", "nft", "web3",
+            "blockchain", "altcoin", "token", "coin"
+        ],
+        "politics": [
+            "election", "president", "congress", "senate", "vote", "poll",
+            "democrat", "republican", "biden", "trump", "government", "policy",
+            "legislation", "campaign", "candidate", "governor", "mayor"
+        ],
+        "sports": [
+            "nfl", "nba", "mlb", "nhl", "football", "basketball", "baseball",
+            "hockey", "soccer", "tennis", "golf", "olympics", "championship",
+            "playoffs", "superbowl", "worldcup", "game", "match", "team"
+        ],
+        "finance": [
+            "stock", "market", "fed", "interest", "rate", "recession", "gdp",
+            "inflation", "economy", "nasdaq", "dow", "s&p", "forex", "bond",
+            "treasury", "commodities", "oil", "gold", "silver"
+        ]
+    }
     
     def __init__(
         self,
@@ -74,17 +101,14 @@ class PolymarketToolkit(BaseToolkit):
             **config
         )
         
-       
         self.timeout = config.get("timeout", 30)
         self.cache_ttl = config.get("cache_ttl", 300)
         self.graph_api_key = config.get("graph_api_key") or os.getenv("GRAPH_API_KEY")
-        
         
         self.gamma_client = None
         self.data_client = None
         self.subgraph_client = None
         
-      
         self._cache = {}
         
         logger.info(f"Initialized PolymarketToolkit with timeout={self.timeout}")
@@ -93,26 +117,16 @@ class PolymarketToolkit(BaseToolkit):
         """
         Setup dependencies for the toolkit.
         Required abstract method from BaseToolkit.
-        
-        Note: Actual client initialization is deferred to _ensure_clients()
-        to support async context managers properly.
         """
-    
         logger.info("PolymarketToolkit dependencies setup complete (lazy initialization)")
     
     def _initialize_tools(self) -> List[dspy.Tool]:
         """
         Initialize and return all available tools.
         Required abstract method from BaseToolkit.
-        
-        Wrap each method with dspy.Tool to register them properly.
-        
-        Returns:
-            List of dspy.Tool objects for all Polymarket tools
         """
         tools = []
         
-       
         tools.append(dspy.Tool(
             func=self.search_markets,
             name="search_markets"
@@ -128,13 +142,11 @@ class PolymarketToolkit(BaseToolkit):
             name="get_liquid_markets"
         ))
         
-        # Market details
         tools.append(dspy.Tool(
             func=self.get_market_details,
             name="get_market_details"
         ))
         
-     
         tools.append(dspy.Tool(
             func=self.get_user_positions,
             name="get_user_positions"
@@ -174,6 +186,25 @@ class PolymarketToolkit(BaseToolkit):
         if self.subgraph_client:
             await self.subgraph_client.__aexit__(None, None, None)
     
+    def _detect_category(self, query: str) -> Optional[str]:
+        """
+        Detect category from query using keyword matching.
+        
+        Args:
+            query: Search query
+            
+        Returns:
+            Category name or None if no match
+        """
+        query_lower = query.lower()
+        
+        for category, keywords in self.CATEGORY_KEYWORDS.items():
+            if any(keyword in query_lower for keyword in keywords):
+                logger.info(f"Detected category '{category}' for query: {query}")
+                return category
+        
+        return None
+    
     def _filter_active_markets(self, markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Filter out markets that have already ended
@@ -190,22 +221,18 @@ class PolymarketToolkit(BaseToolkit):
         for market in markets:
             end_date_str = market.get("endDate")
             if not end_date_str:
-               
                 active_markets.append(market)
                 continue
             
             try:
-            
                 end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
                 
-               
                 if end_date > now:
                     active_markets.append(market)
                 else:
                     logger.debug(f"Filtered out expired market: {market.get('question')} (ended {end_date_str})")
             except (ValueError, AttributeError) as e:
                 logger.warning(f"Could not parse end date '{end_date_str}': {e}")
-         
                 active_markets.append(market)
         
         return active_markets
@@ -216,7 +243,8 @@ class PolymarketToolkit(BaseToolkit):
         limit: int = 20
     ) -> MarketSearchResult:
         """
-        Search for Polymarket markets by title or description
+        Search for Polymarket markets by title or description.
+        Automatically detects category and uses category-based search for better results.
         
         Args:
             query: Search term (e.g., "bitcoin", "election", "AI")
@@ -228,14 +256,27 @@ class PolymarketToolkit(BaseToolkit):
         await self._ensure_clients()
         
         try:
-            markets = await self.gamma_client.search_markets(query)
+            category = self._detect_category(query)
             
-          
+            if category:
+                logger.info(f"Using category-based search for '{category}'")
+                markets = await self.gamma_client.search_in_category(
+                    query=query,
+                    category=category,
+                    limit=limit * 2
+                )
+            else:
+                logger.info(f"Using general search")
+                markets = await self.gamma_client.search_markets(query)
+            
             markets = self._filter_active_markets(markets)
             
-           
-            markets = markets[:min(limit, len(markets))]
+            if not markets and category:
+                logger.info(f"No results in category '{category}', trying general search")
+                markets = await self.gamma_client.search_markets(query)
+                markets = self._filter_active_markets(markets)
             
+            markets = markets[:min(limit, len(markets))]
             
             formatted_markets = []
             for market in markets:
@@ -284,13 +325,8 @@ class PolymarketToolkit(BaseToolkit):
         await self._ensure_clients()
         
         try:
-            
             markets = await self.gamma_client.get_trending_markets(limit=limit * 2)
-            
-           
             markets = self._filter_active_markets(markets)
-            
-           
             markets = markets[:limit]
             
             formatted_markets = []
@@ -501,13 +537,8 @@ class PolymarketToolkit(BaseToolkit):
         await self._ensure_clients()
         
         try:
-  
             markets = await self.gamma_client.get_liquidity_leaders(limit=limit * 2)
-            
-           
             markets = self._filter_active_markets(markets)
-            
-           
             markets = markets[:limit]
             
             formatted_markets = []
@@ -538,7 +569,6 @@ class PolymarketToolkit(BaseToolkit):
             )
 
 
-# Tool descriptions for ROMA's tool selector
 POLYMARKET_TOOLS = {
     "search_markets": {
         "description": "Search for prediction markets by keyword or topic",
