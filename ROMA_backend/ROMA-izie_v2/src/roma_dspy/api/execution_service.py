@@ -97,7 +97,7 @@ class ExecutionService:
             metadata=merged_metadata
         )
 
-        fast_result = await self.smart_router.route(goal)
+        fast_result = await self.smart_router.route(goal, client_id=client_name)
         if fast_result and fast_result.get("success"):
             logger.info(f"⚡ Fast-path execution completed for {execution_id} in ~2s")
             

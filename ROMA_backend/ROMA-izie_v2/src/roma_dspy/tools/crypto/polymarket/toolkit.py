@@ -52,22 +52,104 @@ class PolymarketToolkit(BaseToolkit):
             "doge", "polygon", "matic", "avalanche", "avax", "chainlink",
             "link", "polkadot", "dot", "litecoin", "ltc", "monero", "xmr",
             "tether", "usdt", "usdc", "stablecoin", "defi", "nft", "web3",
-            "blockchain", "altcoin", "token", "coin"
+            "blockchain", "altcoin", "token", "coin", "binance", "bnb",
+            "cosmos", "atom", "algorand", "algo", "stellar", "xlm", "tron",
+            "trx", "eos", "dash", "zcash", "tezos", "xtz", "compound",
+            "aave", "uniswap", "uni", "pancakeswap", "cake", "sushi",
+            "maker", "mkr", "dai", "curve", "yearn", "yfi"
         ],
         "politics": [
             "election", "president", "congress", "senate", "vote", "poll",
             "democrat", "republican", "biden", "trump", "government", "policy",
-            "legislation", "campaign", "candidate", "governor", "mayor"
+            "legislation", "campaign", "candidate", "governor", "mayor",
+            "political", "parliament", "minister", "supreme court", "scotus",
+            "impeachment", "cabinet", "federal", "state", "local", "ballot",
+            "primary", "caucus", "nomination", "party", "liberal", "conservative",
+            "progressive", "moderate", "gop", "dnc", "rnc"
         ],
         "sports": [
             "nfl", "nba", "mlb", "nhl", "football", "basketball", "baseball",
             "hockey", "soccer", "tennis", "golf", "olympics", "championship",
-            "playoffs", "superbowl", "worldcup", "game", "match", "team"
+            "playoffs", "superbowl", "super bowl", "world cup", "worldcup",
+            "game", "match", "team", "player", "athlete", "coach", "mvp",
+            "finals", "semifinal", "quarterback", "touchdown", "goal", "score",
+            "league", "division", "conference", "fifa", "uefa", "ncaa",
+            "march madness", "world series", "stanley cup", "messi", "ronaldo",
+            "lebron", "curry", "mahomes", "formula 1", "f1", "nascar", "ufc",
+            "boxing", "wrestling", "mma", "premier league", "la liga"
         ],
         "finance": [
-            "stock", "market", "fed", "interest", "rate", "recession", "gdp",
-            "inflation", "economy", "nasdaq", "dow", "s&p", "forex", "bond",
-            "treasury", "commodities", "oil", "gold", "silver"
+            "stock", "market", "fed", "federal reserve", "interest", "rate",
+            "recession", "gdp", "inflation", "economy", "nasdaq", "dow",
+            "s&p", "s&p 500", "sp500", "forex", "bond", "treasury", "yield",
+            "commodities", "oil", "gold", "silver", "copper", "crude",
+            "brent", "wti", "futures", "options", "derivatives", "etf",
+            "mutual fund", "hedge fund", "investment", "portfolio", "bull",
+            "bear", "rally", "crash", "correction", "volatility", "vix",
+            "earnings", "revenue", "profit", "loss", "dividend", "ipo",
+            "merger", "acquisition", "bankruptcy", "credit", "debt", "loan"
+        ],
+        "geopolitics": [
+            "war", "conflict", "military", "defense", "nato", "un",
+            "united nations", "sanction", "diplomacy", "treaty", "alliance",
+            "invasion", "occupation", "ceasefire", "peace", "negotiation",
+            "russia", "ukraine", "china", "taiwan", "israel", "palestine",
+            "iran", "north korea", "syria", "afghanistan", "iraq", "yemen",
+            "nuclear", "weapons", "missile", "drone", "cyber", "espionage",
+            "intelligence", "cia", "fbi", "nsa", "trade war", "tariff",
+            "embargo", "blockade", "regime", "coup", "uprising", "revolution"
+        ],
+        "tech": [
+            "ai", "artificial intelligence", "machine learning", "llm",
+            "chatgpt", "openai", "anthropic", "claude", "gpt", "google",
+            "microsoft", "apple", "meta", "facebook", "amazon", "tesla",
+            "nvidia", "amd", "intel", "qualcomm", "samsung", "spacex",
+            "starlink", "robot", "automation", "quantum", "5g", "6g",
+            "cloud", "aws", "azure", "gcp", "saas", "software", "hardware",
+            "chip", "semiconductor", "processor", "gpu", "cpu", "twitter",
+            "x", "instagram", "tiktok", "youtube", "netflix", "spotify",
+            "uber", "lyft", "airbnb", "doordash", "zoom", "slack"
+        ],
+        "culture": [
+            "movie", "film", "tv", "television", "series", "show", "actor",
+            "actress", "director", "oscar", "academy", "emmy", "golden globe",
+            "netflix", "disney", "hbo", "streaming", "music", "album",
+            "song", "artist", "singer", "rapper", "grammy", "billboard",
+            "concert", "tour", "festival", "coachella", "celebrity", "fame",
+            "viral", "trend", "meme", "influencer", "youtube", "tiktok",
+            "instagram", "social media", "fashion", "style", "art", "artist",
+            "painting", "sculpture", "museum", "gallery", "book", "author",
+            "novel", "bestseller", "award", "prize", "pulitzer", "nobel"
+        ],
+        "world": [
+            "global", "international", "country", "nation", "continent",
+            "europe", "asia", "africa", "america", "australia", "uk",
+            "france", "germany", "italy", "spain", "japan", "india",
+            "brazil", "mexico", "canada", "australia", "south korea",
+            "climate", "environment", "weather", "hurricane", "earthquake",
+            "tsunami", "flood", "wildfire", "drought", "pandemic", "epidemic",
+            "disease", "virus", "covid", "who", "health", "migration",
+            "refugee", "border", "immigration", "visa", "passport"
+        ],
+        "economy": [
+            "gdp", "growth", "recession", "unemployment", "jobs", "employment",
+            "labor", "wage", "salary", "minimum wage", "income", "poverty",
+            "wealth", "inequality", "tax", "fiscal", "monetary", "budget",
+            "deficit", "surplus", "spending", "revenue", "export", "import",
+            "trade", "manufacturing", "industrial", "production", "consumer",
+            "retail", "housing", "real estate", "mortgage", "rent", "cpi",
+            "ppi", "inflation rate", "deflation", "stagflation", "boom",
+            "bust", "cycle", "recovery", "stimulus", "bailout", "subsidy"
+        ],
+        "elections": [
+            "vote", "voting", "ballot", "poll", "polling", "election day",
+            "midterm", "general election", "runoff", "recount", "swing state",
+            "battleground", "electoral", "electoral college", "popular vote",
+            "turnout", "voter", "electorate", "district", "gerrymandering",
+            "campaign", "debate", "candidate", "incumbent", "challenger",
+            "primary", "caucus", "convention", "delegate", "nomination",
+            "endorsement", "fundraising", "pac", "super pac", "ad",
+            "commercial", "rally", "town hall", "stump", "canvass"
         ]
     }
     
