@@ -39,14 +39,7 @@ async def create_execution(
     solve_request: SolveRequest,
     client_name: str = Depends(verify_api_key)
 ) -> ExecutionResponse:
-    """
-    Start a new task execution.
-
-    Creates a background task that decomposes and executes the goal.
-
-    Returns:
-        ExecutionResponse with execution_id for polling status
-    """
+    """Start a new task execution."""
     app_state = request.app.state.app_state
 
     if not app_state.execution_service:
@@ -60,7 +53,7 @@ async def create_execution(
             goal=solve_request.goal,
             max_depth=solve_request.max_depth,
             metadata=solve_request.metadata,
-	    client_name=client_name
+            client_name=client_name
         )
 
         storage = app_state.storage
@@ -89,19 +82,7 @@ async def list_executions(
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000)
 ) -> ExecutionListResponse:
-    """
-    List all executions with optional filtering.
-
-    Args:
-        status: Optional status filter (running, completed, failed)
-        offset: Number of records to skip
-        limit: Maximum number of records to return
-
-    Returns:
-        List of executions with pagination info
-    """
-    offset, limit = validate_pagination(offset, limit)
-
+    """List all executions with optional filtering."""
     try:
         executions = await storage.list_executions(
             status=status,
@@ -111,18 +92,12 @@ async def list_executions(
 
         total = await storage.count_executions(status=status)
 
-        execution_responses = [
-            execution_to_response(execution)
-            for execution in executions
-        ]
-
         return ExecutionListResponse(
-            executions=execution_responses,
+            executions=[execution_to_response(ex) for ex in executions],
             total=total,
             offset=offset,
             limit=limit
         )
-
     except Exception as e:
         logger.error(f"Failed to list executions: {e}")
         raise HTTPException(
@@ -132,19 +107,12 @@ async def list_executions(
 
 
 @router.get("/executions/{execution_id}", response_model=ExecutionDetailResponse)
-async def get_execution(
+async def get_execution_details(
     execution_id: str = Depends(verify_execution_exists),
-    storage: PostgresStorage = Depends(get_storage)
+    storage: PostgresStorage = Depends(get_storage),
+    include_statistics: bool = Query(True, description="Include DAG statistics")
 ) -> ExecutionDetailResponse:
-    """
-    Get detailed execution information including DAG visualization.
-
-    Args:
-        execution_id: Execution ID
-
-    Returns:
-        Detailed execution info with DAG snapshot
-    """
+    """Get detailed execution information."""
     try:
         execution = await storage.get_execution(execution_id)
 
@@ -154,15 +122,17 @@ async def get_execution(
                 detail=f"Execution {execution_id} not found"
             )
 
-        return await execution_to_detail_response(execution, storage=storage)
-
+        return await execution_to_detail_response(
+            execution=execution,
+            storage=storage if include_statistics else None
+        )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution {execution_id}: {e}")
+        logger.error(f"Failed to get execution details: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get execution: {str(e)}"
+            detail=f"Failed to get execution details: {str(e)}"
         )
 
 
@@ -171,17 +141,7 @@ async def get_execution_status(
     request: Request,
     execution_id: str = Depends(verify_execution_exists)
 ) -> StatusPollingResponse:
-    """
-    Get current execution status for polling.
-
-    This endpoint is optimized for frequent polling with caching.
-
-    Args:
-        execution_id: Execution ID
-
-    Returns:
-        Current execution status with progress information
-    """
+    """Get current execution status for polling."""
     app_state = request.app.state.app_state
 
     if not app_state.execution_service:
@@ -199,80 +159,39 @@ async def get_execution_status(
                 detail=f"Execution {execution_id} not found"
             )
 
-        storage = app_state.storage
-        execution = await storage.get_execution(execution_id)
-
-        if not execution:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Execution {execution_id} not found"
-            )
-
-        progress = calculate_progress(execution)
-
-        current_task_id = None
-        current_task_goal = None
-
-        dag_data = None
-        try:
-            checkpoint = await storage.get_latest_checkpoint(execution_id, valid_only=True)
-            if checkpoint and checkpoint.root_dag:
-                dag_data = checkpoint.root_dag
-                if hasattr(dag_data, 'model_dump'):
-                    dag_data = dag_data.model_dump(mode="python")
-        except Exception as e:
-            logger.warning(f"Failed to load checkpoint for current task: {e}")
-
-        if dag_data:
-            try:
-                dag = TaskDAG.from_dict(dag_data)
-                in_progress_tasks = [
-                    task for task in dag.get_all_tasks()
-                    if task.status == TaskStatus.IN_PROGRESS
-                ]
-                if in_progress_tasks:
-                    current_task = in_progress_tasks[0]
-                    current_task_id = current_task.task_id
-                    current_task_goal = current_task.goal
-            except Exception as e:
-                logger.warning(f"Failed to extract current task from DAG: {e}")
+        progress = calculate_progress(
+            status=status_data["status"],
+            total_tasks=status_data.get("total_tasks", 0),
+            completed_tasks=status_data.get("completed_tasks", 0)
+        )
 
         return StatusPollingResponse(
             execution_id=execution_id,
-            status=execution.status,
+            status=status_data["status"],
             progress=progress,
-            current_task_id=current_task_id,
-            current_task_goal=current_task_goal,
-            completed_tasks=execution.completed_tasks,
-            total_tasks=execution.total_tasks,
-            estimated_remaining_seconds=None,
-            last_updated=execution.updated_at
+            total_tasks=status_data.get("total_tasks", 0),
+            completed_tasks=status_data.get("completed_tasks", 0),
+            failed_tasks=status_data.get("failed_tasks", 0),
+            final_result=status_data.get("final_result")
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get execution status {execution_id}: {e}")
+        logger.error(f"Failed to get execution status: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get execution status: {str(e)}"
         )
 
 
-@router.post("/executions/{execution_id}/cancel", response_model=ExecutionResponse)
+@router.post("/executions/{execution_id}/cancel")
 async def cancel_execution(
     request: Request,
-    execution_id: str = Depends(verify_execution_exists)
-) -> ExecutionResponse:
-    """
-    Cancel a running execution.
-
-    Args:
-        execution_id: Execution ID
-
-    Returns:
-        Updated execution with cancelled status
-    """
+    execution_id: str = Depends(verify_execution_exists),
+    client_name: str = Depends(verify_api_key)
+) -> dict:
+    """Cancel a running execution."""
     app_state = request.app.state.app_state
 
     if not app_state.execution_service:
@@ -282,82 +201,17 @@ async def cancel_execution(
         )
 
     try:
-        cancelled = await app_state.execution_service.cancel_execution(execution_id)
+        success = await app_state.execution_service.cancel_execution(execution_id)
 
-        if not cancelled:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Execution {execution_id} is not running (cannot cancel)"
-            )
+        return {
+            "message": f"Execution {execution_id} cancelled successfully",
+            "execution_id": execution_id,
+            "cancelled": success
+        }
 
-        storage = app_state.storage
-        execution = await storage.get_execution(execution_id)
-
-        if not execution:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Execution {execution_id} not found"
-            )
-
-        return execution_to_response(execution)
-
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Failed to cancel execution {execution_id}: {e}")
+        logger.error(f"Failed to cancel execution: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to cancel execution: {str(e)}"
-        )
-
-
-@router.get("/executions/{execution_id}/data", response_model=ExecutionDataResponse)
-async def get_execution_data(
-    request: Request,
-    execution_id: str,
-    storage: PostgresStorage = Depends(get_storage)
-) -> ExecutionDataResponse:
-    """
-    Get consolidated execution data from MLflow traces.
-
-    This endpoint fetches and consolidates MLflow trace data for real-time visualization.
-    It uses ExecutionDataService to fetch traces and build task/agent execution structure.
-
-    Use this for:
-    - Live TUI updates (poll this endpoint periodically)
-    - Real-time visualization of task progress
-    - Accessing detailed span/token metrics
-
-    Args:
-        execution_id: Execution ID
-
-    Returns:
-        Consolidated execution data with tasks, agent executions, spans, and metrics
-    """
-    execution = await storage.get_execution(execution_id)
-    if not execution:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Execution {execution_id} not found"
-        )
-
-    import os
-    mlflow_tracking_uri = os.getenv('MLFLOW_TRACKING_URI', 'http://127.0.0.1:5000')
-
-    try:
-        from roma_dspy.core.services.execution_data_service import ExecutionDataService
-
-        service = ExecutionDataService(
-            mlflow_tracking_uri=mlflow_tracking_uri,
-        )
-
-        data = service.get_execution_data(execution_id)
-
-        return ExecutionDataResponse(**data)
-
-    except Exception as e:
-        logger.error(f"Failed to get execution data for {execution_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get execution data: {str(e)}"
         )

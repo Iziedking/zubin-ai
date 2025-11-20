@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 class SolveRequest(BaseModel):
     """Request schema for starting a new task execution."""
-
     goal: str = Field(..., min_length=1, description="Task goal to decompose and execute")
     max_depth: int = Field(default=2, ge=0, le=10, description="Maximum recursion depth")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
@@ -16,21 +15,18 @@ class SolveRequest(BaseModel):
 
 class CheckpointRestoreRequest(BaseModel):
     """Request schema for restoring from checkpoint."""
-
     checkpoint_id: str = Field(..., description="Checkpoint ID to restore from")
     resume: bool = Field(default=True, description="Resume execution after restore")
 
 
 class ConfigUpdateRequest(BaseModel):
     """Request schema for updating configuration."""
-
     profile: Optional[str] = Field(default=None, description="Configuration profile name")
     overrides: Dict[str, Any] = Field(..., description="Configuration overrides")
 
 
 class TaskNodeResponse(BaseModel):
     """Response schema for a single task node."""
-
     task_id: str
     goal: str
     status: str
@@ -46,7 +42,6 @@ class TaskNodeResponse(BaseModel):
 
 class DAGStatisticsResponse(BaseModel):
     """Response schema for DAG statistics."""
-
     dag_id: str
     total_tasks: int
     status_counts: Dict[str, int]
@@ -57,36 +52,32 @@ class DAGStatisticsResponse(BaseModel):
 
 class FinalResultResponse(BaseModel):
     """Response schema for final execution result."""
-
-    result: Optional[str] = None
+    result: Optional[Any] = None
     status: str
 
 
 class ExecutionResponse(BaseModel):
     """Response schema for execution metadata."""
-
     execution_id: str
     status: str
     initial_goal: str
     max_depth: int
-    total_tasks: int
-    completed_tasks: int
-    failed_tasks: int
-    created_at: datetime
-    updated_at: datetime
-    metadata: Dict[str, Any]
+    total_tasks: Optional[int] = None
+    completed_tasks: Optional[int] = None
+    failed_tasks: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     final_result: Optional[FinalResultResponse] = None
 
 
 class ExecutionDetailResponse(ExecutionResponse):
     """Extended execution response with statistics."""
-
     statistics: Optional[DAGStatisticsResponse] = None
 
 
 class ExecutionListResponse(BaseModel):
     """Response schema for listing executions."""
-
     executions: List[ExecutionResponse]
     total: int
     offset: int
@@ -95,7 +86,6 @@ class ExecutionListResponse(BaseModel):
 
 class CheckpointResponse(BaseModel):
     """Response schema for checkpoint metadata."""
-
     checkpoint_id: str
     execution_id: str
     created_at: datetime
@@ -112,14 +102,12 @@ class CheckpointResponse(BaseModel):
 
 class CheckpointListResponse(BaseModel):
     """Response schema for listing checkpoints."""
-
     checkpoints: List[CheckpointResponse]
     total: int
 
 
 class TaskTraceResponse(BaseModel):
     """Response schema for task trace."""
-
     trace_id: int
     execution_id: str
     task_id: str
@@ -138,7 +126,6 @@ class TaskTraceResponse(BaseModel):
 
 class LMTraceResponse(BaseModel):
     """Response schema for LM trace."""
-
     trace_id: int
     execution_id: str
     task_id: Optional[str] = None
@@ -159,7 +146,6 @@ class LMTraceResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Response schema for system health check."""
-
     status: str
     version: str
     uptime_seconds: float
@@ -171,7 +157,6 @@ class HealthResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Response schema for API errors."""
-
     error: str
     detail: Optional[str] = None
     execution_id: Optional[str] = None
@@ -180,7 +165,6 @@ class ErrorResponse(BaseModel):
 
 class MetricsResponse(BaseModel):
     """Response schema for execution metrics."""
-
     execution_id: str
     total_lm_calls: int
     total_tokens: int
@@ -191,26 +175,17 @@ class MetricsResponse(BaseModel):
 
 class StatusPollingResponse(BaseModel):
     """Response schema for status polling."""
-
     execution_id: str
     status: str
     progress: float
-    current_task_id: Optional[str] = None
-    current_task_goal: Optional[str] = None
-    completed_tasks: int
     total_tasks: int
-    estimated_remaining_seconds: Optional[int] = None
-    last_updated: datetime
+    completed_tasks: int
+    failed_tasks: int
+    final_result: Optional[Dict[str, Any]] = None
 
 
 class ExecutionDataResponse(BaseModel):
-    """Response schema for consolidated execution data from MLflow traces.
-
-    This endpoint provides real-time trace data suitable for live visualization.
-    Data is fetched from MLflow and consolidated by ExecutionDataService.
-    Searches all MLflow experiments by execution_id tag.
-    """
-
+    """Response schema for consolidated execution data from MLflow traces."""
     execution_id: str
     tasks: List[Dict[str, Any]]
     summary: Dict[str, Any]
