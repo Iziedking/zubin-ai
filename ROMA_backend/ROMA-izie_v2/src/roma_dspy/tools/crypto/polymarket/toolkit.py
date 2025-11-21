@@ -65,8 +65,6 @@ class PolymarketToolkit(BaseToolkit):
         max_slippage_percent: float = 5,
         **kwargs
     ):
-        super().__init__(**kwargs)
-        
         self.timeout = timeout
         self.cache_ttl = cache_ttl
         self.graph_api_key = graph_api_key or os.getenv("THE_GRAPH_API_KEY")
@@ -84,6 +82,8 @@ class PolymarketToolkit(BaseToolkit):
         self.subgraph_client = None
         self.trading_client = None
         self.risk_manager = None
+
+        super().__init__(**kwargs)
         
         logger.info(f"PolymarketToolkit initialized (trading={'enabled' if self.trading_enabled else 'disabled'})")
     
@@ -93,17 +93,53 @@ class PolymarketToolkit(BaseToolkit):
     def _initialize_tools(self) -> List[dspy.Tool]:
         tools = []
         
-        tools.append(dspy.Tool(func=self.search_markets, name="search_markets"))
-        tools.append(dspy.Tool(func=self.get_trending_markets, name="get_trending_markets"))
-        tools.append(dspy.Tool(func=self.get_liquid_markets, name="get_liquid_markets"))
-        tools.append(dspy.Tool(func=self.get_market_details, name="get_market_details"))
-        tools.append(dspy.Tool(func=self.get_user_positions, name="get_user_positions"))
-        tools.append(dspy.Tool(func=self.get_market_holders, name="get_market_holders"))
+        tools.append(dspy.Tool(
+            func=self.search_markets,
+            name="search_markets",
+            desc="Search for Polymarket prediction markets by keyword or topic. Returns matching markets with prices, volume, and liquidity data."
+        ))
+        tools.append(dspy.Tool(
+            func=self.get_trending_markets,
+            name="get_trending_markets",
+            desc="Get trending Polymarket markets sorted by 24-hour trading volume. Returns top markets with prices and activity data."
+        ))
+        tools.append(dspy.Tool(
+            func=self.get_liquid_markets,
+            name="get_liquid_markets",
+            desc="Get the most liquid Polymarket markets sorted by liquidity depth. Returns markets with high tradability."
+        ))
+        tools.append(dspy.Tool(
+            func=self.get_market_details,
+            name="get_market_details",
+            desc="Get detailed information about a specific Polymarket market including prices, volume, liquidity, outcomes, and dates."
+        ))
+        tools.append(dspy.Tool(
+            func=self.get_user_positions,
+            name="get_user_positions",
+            desc="Get a user's positions and portfolio on Polymarket by wallet address. Returns holdings with values and PnL."
+        ))
+        tools.append(dspy.Tool(
+            func=self.get_market_holders,
+            name="get_market_holders",
+            desc="Get top holders of a specific Polymarket market. Returns whale positions and market concentration data."
+        ))
         
         if self.trading_enabled:
-            tools.append(dspy.Tool(func=self.place_order, name="place_order"))
-            tools.append(dspy.Tool(func=self.get_balance, name="get_balance"))
-            tools.append(dspy.Tool(func=self.cancel_order, name="cancel_order"))
+            tools.append(dspy.Tool(
+                func=self.place_order,
+                name="place_order",
+                desc="Place a trade order on Polymarket. Requires trading credentials. Supports limit orders with risk validation."
+            ))
+            tools.append(dspy.Tool(
+                func=self.get_balance,
+                name="get_balance",
+                desc="Get USDC balance and trading allowance from Polymarket account. Requires trading credentials."
+            ))
+            tools.append(dspy.Tool(
+                func=self.cancel_order,
+                name="cancel_order",
+                desc="Cancel an existing order on Polymarket by order ID. Requires trading credentials."
+            ))
             logger.info("Trading tools enabled")
         
         logger.info(f"Initialized {len(tools)} Polymarket tools")
