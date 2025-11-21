@@ -1,14 +1,3 @@
-"""
-Polymarket Toolkit for ROMA Framework
-
-Provides tools for accessing Polymarket prediction market data:
-- Market search and discovery
-- Price and volume data
-- Position tracking
-- Holder analysis
-- On-chain data via The Graph
-"""
-
 from typing import Dict, List, Any, Optional, TYPE_CHECKING
 import asyncio
 import logging
@@ -27,9 +16,10 @@ from .types import (
     MarketSearchResult,
     MarketDetails,
     UserPosition,
-    MarketHolder
+    MarketHolder,
+    OrderResponse,
+    Balance
 )
-
 
 if TYPE_CHECKING:
     from roma_dspy.core.storage.file_storage import FileStorage
@@ -37,213 +27,89 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+POLYMARKET_TOOLS = [
+    "search_markets",
+    "get_trending_markets",
+    "get_liquid_markets",
+    "get_market_details",
+    "get_user_positions",
+    "get_market_holders",
+    "place_order",
+    "get_balance",
+    "cancel_order"
+]
+
+
 class PolymarketToolkit(BaseToolkit):
-    """
-    Polymarket Toolkit for accessing prediction market data
-    
-    Provides comprehensive access to Polymarket markets, prices, positions,
-    and on-chain data through multiple API endpoints.
-    """
     
     CATEGORY_KEYWORDS = {
-        "crypto": [
-            "bitcoin", "btc", "ethereum", "eth", "crypto", "cryptocurrency",
-            "solana", "sol", "cardano", "ada", "xrp", "ripple", "dogecoin",
-            "doge", "polygon", "matic", "avalanche", "avax", "chainlink",
-            "link", "polkadot", "dot", "litecoin", "ltc", "monero", "xmr",
-            "tether", "usdt", "usdc", "stablecoin", "defi", "nft", "web3",
-            "blockchain", "altcoin", "token", "coin", "binance", "bnb",
-            "cosmos", "atom", "algorand", "algo", "stellar", "xlm", "tron",
-            "trx", "eos", "dash", "zcash", "tezos", "xtz", "compound",
-            "aave", "uniswap", "uni", "pancakeswap", "cake", "sushi",
-            "maker", "mkr", "dai", "curve", "yearn", "yfi"
-        ],
-        "politics": [
-            "election", "president", "congress", "senate", "vote", "poll",
-            "democrat", "republican", "biden", "trump", "government", "policy",
-            "legislation", "campaign", "candidate", "governor", "mayor",
-            "political", "parliament", "minister", "supreme court", "scotus",
-            "impeachment", "cabinet", "federal", "state", "local", "ballot",
-            "primary", "caucus", "nomination", "party", "liberal", "conservative",
-            "progressive", "moderate", "gop", "dnc", "rnc"
-        ],
-        "sports": [
-            "nfl", "nba", "mlb", "nhl", "football", "basketball", "baseball",
-            "hockey", "soccer", "tennis", "golf", "olympics", "championship",
-            "playoffs", "superbowl", "super bowl", "world cup", "worldcup",
-            "game", "match", "team", "player", "athlete", "coach", "mvp",
-            "finals", "semifinal", "quarterback", "touchdown", "goal", "score",
-            "league", "division", "conference", "fifa", "uefa", "ncaa",
-            "march madness", "world series", "stanley cup", "messi", "ronaldo",
-            "lebron", "curry", "mahomes", "formula 1", "f1", "nascar", "ufc",
-            "boxing", "wrestling", "mma", "premier league", "la liga"
-        ],
-        "finance": [
-            "stock", "market", "fed", "federal reserve", "interest", "rate",
-            "recession", "gdp", "inflation", "economy", "nasdaq", "dow",
-            "s&p", "s&p 500", "sp500", "forex", "bond", "treasury", "yield",
-            "commodities", "oil", "gold", "silver", "copper", "crude",
-            "brent", "wti", "futures", "options", "derivatives", "etf",
-            "mutual fund", "hedge fund", "investment", "portfolio", "bull",
-            "bear", "rally", "crash", "correction", "volatility", "vix",
-            "earnings", "revenue", "profit", "loss", "dividend", "ipo",
-            "merger", "acquisition", "bankruptcy", "credit", "debt", "loan"
-        ],
-        "geopolitics": [
-            "war", "conflict", "military", "defense", "nato", "un",
-            "united nations", "sanction", "diplomacy", "treaty", "alliance",
-            "invasion", "occupation", "ceasefire", "peace", "negotiation",
-            "russia", "ukraine", "china", "taiwan", "israel", "palestine",
-            "iran", "north korea", "syria", "afghanistan", "iraq", "yemen",
-            "nuclear", "weapons", "missile", "drone", "cyber", "espionage",
-            "intelligence", "cia", "fbi", "nsa", "trade war", "tariff",
-            "embargo", "blockade", "regime", "coup", "uprising", "revolution"
-        ],
-        "tech": [
-            "ai", "artificial intelligence", "machine learning", "llm",
-            "chatgpt", "openai", "anthropic", "claude", "gpt", "google",
-            "microsoft", "apple", "meta", "facebook", "amazon", "tesla",
-            "nvidia", "amd", "intel", "qualcomm", "samsung", "spacex",
-            "starlink", "robot", "automation", "quantum", "5g", "6g",
-            "cloud", "aws", "azure", "gcp", "saas", "software", "hardware",
-            "chip", "semiconductor", "processor", "gpu", "cpu", "twitter",
-            "x", "instagram", "tiktok", "youtube", "netflix", "spotify",
-            "uber", "lyft", "airbnb", "doordash", "zoom", "slack"
-        ],
-        "culture": [
-            "movie", "film", "tv", "television", "series", "show", "actor",
-            "actress", "director", "oscar", "academy", "emmy", "golden globe",
-            "netflix", "disney", "hbo", "streaming", "music", "album",
-            "song", "artist", "singer", "rapper", "grammy", "billboard",
-            "concert", "tour", "festival", "coachella", "celebrity", "fame",
-            "viral", "trend", "meme", "influencer", "youtube", "tiktok",
-            "instagram", "social media", "fashion", "style", "art", "artist",
-            "painting", "sculpture", "museum", "gallery", "book", "author",
-            "novel", "bestseller", "award", "prize", "pulitzer", "nobel"
-        ],
-        "world": [
-            "global", "international", "country", "nation", "continent",
-            "europe", "asia", "africa", "america", "australia", "uk",
-            "france", "germany", "italy", "spain", "japan", "india",
-            "brazil", "mexico", "canada", "australia", "south korea",
-            "climate", "environment", "weather", "hurricane", "earthquake",
-            "tsunami", "flood", "wildfire", "drought", "pandemic", "epidemic",
-            "disease", "virus", "covid", "who", "health", "migration",
-            "refugee", "border", "immigration", "visa", "passport"
-        ],
-        "economy": [
-            "gdp", "growth", "recession", "unemployment", "jobs", "employment",
-            "labor", "wage", "salary", "minimum wage", "income", "poverty",
-            "wealth", "inequality", "tax", "fiscal", "monetary", "budget",
-            "deficit", "surplus", "spending", "revenue", "export", "import",
-            "trade", "manufacturing", "industrial", "production", "consumer",
-            "retail", "housing", "real estate", "mortgage", "rent", "cpi",
-            "ppi", "inflation rate", "deflation", "stagflation", "boom",
-            "bust", "cycle", "recovery", "stimulus", "bailout", "subsidy"
-        ],
-        "elections": [
-            "vote", "voting", "ballot", "poll", "polling", "election day",
-            "midterm", "general election", "runoff", "recount", "swing state",
-            "battleground", "electoral", "electoral college", "popular vote",
-            "turnout", "voter", "electorate", "district", "gerrymandering",
-            "campaign", "debate", "candidate", "incumbent", "challenger",
-            "primary", "caucus", "convention", "delegate", "nomination",
-            "endorsement", "fundraising", "pac", "super pac", "ad",
-            "commercial", "rally", "town hall", "stump", "canvass"
-        ]
+        "politics": ["election", "president", "congress", "senate", "vote", "political", "government", "biden", "trump"],
+        "crypto": ["bitcoin", "ethereum", "crypto", "btc", "eth", "blockchain", "defi"],
+        "sports": ["nba", "nfl", "soccer", "football", "basketball", "baseball", "championship", "playoffs"],
+        "business": ["stock", "company", "ceo", "merger", "earnings", "revenue", "ipo"],
+        "science": ["covid", "climate", "vaccine", "research", "study", "discovery"],
+        "entertainment": ["movie", "oscar", "emmy", "grammy", "album", "film", "show"]
     }
     
     def __init__(
         self,
-        enabled: bool = True,
-        include_tools: Optional[List[str]] = None,
-        exclude_tools: Optional[List[str]] = None,
-        file_storage: Optional["FileStorage"] = None,
-        **config
+        timeout: int = 30,
+        cache_ttl: int = 300,
+        graph_api_key: Optional[str] = None,
+        trading_enabled: bool = False,
+        private_key: Optional[str] = None,
+        api_key: Optional[str] = None,
+        api_secret: Optional[str] = None,
+        api_passphrase: Optional[str] = None,
+        max_order_size: float = 1000,
+        max_slippage_percent: float = 5,
+        **kwargs
     ):
-        """
-        Initialize Polymarket Toolkit
+        super().__init__(**kwargs)
         
-        Args:
-            enabled: Whether toolkit is enabled (from BaseToolkit)
-            include_tools: List of specific tools to include (from BaseToolkit)
-            exclude_tools: List of tools to exclude (from BaseToolkit)
-            file_storage: FileStorage instance if needed (from BaseToolkit)
-            **config: Additional configuration:
-                - timeout: API timeout in seconds (default: 30)
-                - cache_ttl: Cache TTL in seconds (default: 300)
-                - graph_api_key: The Graph API key for on-chain data
-        """
+        self.timeout = timeout
+        self.cache_ttl = cache_ttl
+        self.graph_api_key = graph_api_key or os.getenv("THE_GRAPH_API_KEY")
         
-        super().__init__(
-            enabled=enabled,
-            include_tools=include_tools,
-            exclude_tools=exclude_tools,
-            file_storage=file_storage,
-            **config
-        )
-        
-        self.timeout = config.get("timeout", 30)
-        self.cache_ttl = config.get("cache_ttl", 300)
-        self.graph_api_key = config.get("graph_api_key") or os.getenv("GRAPH_API_KEY")
+        self.trading_enabled = trading_enabled or os.getenv("POLYMARKET_TRADING_ENABLED", "false").lower() == "true"
+        self.private_key = private_key or os.getenv("POLYMARKET_PRIVATE_KEY")
+        self.api_key = api_key or os.getenv("POLYMARKET_API_KEY")
+        self.api_secret = api_secret or os.getenv("POLYMARKET_SECRET")
+        self.api_passphrase = api_passphrase or os.getenv("POLYMARKET_PASSPHRASE")
+        self.max_order_size = max_order_size
+        self.max_slippage_percent = max_slippage_percent
         
         self.gamma_client = None
         self.data_client = None
         self.subgraph_client = None
+        self.trading_client = None
+        self.risk_manager = None
         
-        self._cache = {}
-        
-        logger.info(f"Initialized PolymarketToolkit with timeout={self.timeout}")
+        logger.info(f"PolymarketToolkit initialized (trading={'enabled' if self.trading_enabled else 'disabled'})")
     
-    def _setup_dependencies(self) -> None:
-        """
-        Setup dependencies for the toolkit.
-        Required abstract method from BaseToolkit.
-        """
-        logger.info("PolymarketToolkit dependencies setup complete (lazy initialization)")
+    def _setup_dependencies(self):
+        logger.info("PolymarketToolkit dependencies setup complete")
     
     def _initialize_tools(self) -> List[dspy.Tool]:
-        """
-        Initialize and return all available tools.
-        Required abstract method from BaseToolkit.
-        """
         tools = []
         
-        tools.append(dspy.Tool(
-            func=self.search_markets,
-            name="search_markets"
-        ))
+        tools.append(dspy.Tool(func=self.search_markets, name="search_markets"))
+        tools.append(dspy.Tool(func=self.get_trending_markets, name="get_trending_markets"))
+        tools.append(dspy.Tool(func=self.get_liquid_markets, name="get_liquid_markets"))
+        tools.append(dspy.Tool(func=self.get_market_details, name="get_market_details"))
+        tools.append(dspy.Tool(func=self.get_user_positions, name="get_user_positions"))
+        tools.append(dspy.Tool(func=self.get_market_holders, name="get_market_holders"))
         
-        tools.append(dspy.Tool(
-            func=self.get_trending_markets,
-            name="get_trending_markets"
-        ))
-        
-        tools.append(dspy.Tool(
-            func=self.get_liquid_markets,
-            name="get_liquid_markets"
-        ))
-        
-        tools.append(dspy.Tool(
-            func=self.get_market_details,
-            name="get_market_details"
-        ))
-        
-        tools.append(dspy.Tool(
-            func=self.get_user_positions,
-            name="get_user_positions"
-        ))
-        
-        tools.append(dspy.Tool(
-            func=self.get_market_holders,
-            name="get_market_holders"
-        ))
+        if self.trading_enabled:
+            tools.append(dspy.Tool(func=self.place_order, name="place_order"))
+            tools.append(dspy.Tool(func=self.get_balance, name="get_balance"))
+            tools.append(dspy.Tool(func=self.cancel_order, name="cancel_order"))
+            logger.info("Trading tools enabled")
         
         logger.info(f"Initialized {len(tools)} Polymarket tools")
         return tools
     
     async def _ensure_clients(self):
-        """Ensure API clients are initialized (lazy initialization for async clients)"""
         if not self.gamma_client:
             self.gamma_client = PolymarketGammaClient(timeout=self.timeout)
             await self.gamma_client.__aenter__()
@@ -259,25 +125,43 @@ class PolymarketToolkit(BaseToolkit):
             )
             await self.subgraph_client.__aenter__()
     
+    async def _ensure_trading_client(self):
+        if not self.trading_enabled:
+            raise ValueError("Trading is not enabled")
+        
+        if not self.trading_client:
+            from .trading_client import PolymarketTradingClient
+            from .risk import RiskManager
+            
+            if not all([self.private_key, self.api_key, self.api_secret, self.api_passphrase]):
+                raise ValueError("Missing trading credentials")
+            
+            self.trading_client = PolymarketTradingClient(
+                private_key=self.private_key,
+                api_key=self.api_key,
+                api_secret=self.api_secret,
+                api_passphrase=self.api_passphrase
+            )
+            
+            self.risk_manager = RiskManager(
+                max_order_size=self.max_order_size,
+                max_slippage_percent=self.max_slippage_percent
+            )
+            
+            await self.trading_client.__aenter__()
+            logger.info("Trading client initialized")
+    
     async def cleanup(self):
-        """Cleanup API clients"""
         if self.gamma_client:
             await self.gamma_client.__aexit__(None, None, None)
         if self.data_client:
             await self.data_client.__aexit__(None, None, None)
         if self.subgraph_client:
             await self.subgraph_client.__aexit__(None, None, None)
+        if self.trading_client:
+            await self.trading_client.__aexit__(None, None, None)
     
     def _detect_category(self, query: str) -> Optional[str]:
-        """
-        Detect category from query using keyword matching.
-        
-        Args:
-            query: Search query
-            
-        Returns:
-            Category name or None if no match
-        """
         query_lower = query.lower()
         
         for category, keywords in self.CATEGORY_KEYWORDS.items():
@@ -288,15 +172,6 @@ class PolymarketToolkit(BaseToolkit):
         return None
     
     def _filter_active_markets(self, markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Filter out markets that have already ended
-        
-        Args:
-            markets: List of market dictionaries
-            
-        Returns:
-            List of markets with future end dates
-        """
         now = datetime.now(timezone.utc)
         active_markets = []
         
@@ -312,146 +187,117 @@ class PolymarketToolkit(BaseToolkit):
                 if end_date > now:
                     active_markets.append(market)
                 else:
-                    logger.debug(f"Filtered out expired market: {market.get('question')} (ended {end_date_str})")
+                    logger.debug(f"Filtered out expired market: {market.get('question')}")
             except (ValueError, AttributeError) as e:
                 logger.warning(f"Could not parse end date '{end_date_str}': {e}")
                 active_markets.append(market)
         
         return active_markets
     
-    async def search_markets(
-        self,
-        query: str,
-        limit: int = 20
-    ) -> MarketSearchResult:
-        """
-        Search for Polymarket markets by title or description.
-        Automatically detects category and uses category-based search for better results.
-        
-        Args:
-            query: Search term (e.g., "bitcoin", "election", "AI")
-            limit: Maximum number of results (default: 20, max: 100)
-        
-        Returns:
-            MarketSearchResult with list of matching markets
-        """
+    async def search_markets(self, query: str, limit: int = 20) -> MarketSearchResult:
         await self._ensure_clients()
         
         try:
             category = self._detect_category(query)
             
             if category:
-                logger.info(f"Using category-based search for '{category}'")
-                markets = await self.gamma_client.search_in_category(
-                    query=query,
-                    category=category,
-                    limit=limit * 2
-                )
+                markets = await self.gamma_client.get_markets_by_category(category, limit=limit * 2)
             else:
-                logger.info(f"Using general search")
-                markets = await self.gamma_client.search_markets(query)
+                markets = await self.gamma_client.search_markets(query, limit=limit * 2)
             
-            markets = self._filter_active_markets(markets)
+            if not markets:
+                return MarketSearchResult(
+                    success=True,
+                    query=query,
+                    count=0,
+                    markets=[]
+                )
             
-            if not markets and category:
-                logger.info(f"No results in category '{category}', trying general search")
-                markets = await self.gamma_client.search_markets(query)
-                markets = self._filter_active_markets(markets)
-            
-            markets = markets[:min(limit, len(markets))]
-            
-            formatted_markets = []
-            for market in markets:
-                formatted_markets.append({
-                    "id": market.get("id"),
-                    "title": market.get("question"),
-                    "description": market.get("description"),
-                    "price_yes": market.get("outcomePrices", [None, None])[1],
-                    "price_no": market.get("outcomePrices", [None, None])[0],
-                    "volume_24h": market.get("volume24hr"),
-                    "liquidity": market.get("liquidity"),
-                    "end_date": market.get("endDate"),
-                    "active": market.get("active", True)
-                })
+            active_markets = self._filter_active_markets(markets)
+            sorted_markets = sorted(active_markets, key=lambda x: x.get("volume", 0), reverse=True)
+            top_markets = sorted_markets[:limit]
             
             return MarketSearchResult(
                 success=True,
                 query=query,
-                count=len(formatted_markets),
-                markets=formatted_markets
+                count=len(top_markets),
+                markets=top_markets
             )
             
         except Exception as e:
             logger.error(f"Error searching markets: {e}")
             return MarketSearchResult(
                 success=False,
-                error=str(e),
                 query=query,
                 count=0,
-                markets=[]
+                error=str(e)
             )
     
-    async def get_trending_markets(
-        self,
-        limit: int = 20
-    ) -> MarketSearchResult:
-        """
-        Get trending markets sorted by 24h volume (only active/future markets)
-        
-        Args:
-            limit: Number of markets to return (default: 20, max: 100)
-        
-        Returns:
-            MarketSearchResult with list of trending markets
-        """
+    async def get_trending_markets(self, limit: int = 10) -> MarketSearchResult:
         await self._ensure_clients()
         
         try:
             markets = await self.gamma_client.get_trending_markets(limit=limit * 2)
-            markets = self._filter_active_markets(markets)
-            markets = markets[:limit]
             
-            formatted_markets = []
-            for market in markets:
-                formatted_markets.append({
-                    "id": market.get("id"),
-                    "title": market.get("question"),
-                    "price_yes": market.get("outcomePrices", [None, None])[1],
-                    "volume_24h": market.get("volume24hr"),
-                    "liquidity": market.get("liquidity"),
-                    "end_date": market.get("endDate")
-                })
+            if not markets:
+                return MarketSearchResult(
+                    success=True,
+                    query="trending",
+                    count=0,
+                    markets=[]
+                )
+            
+            active_markets = self._filter_active_markets(markets)
+            top_markets = active_markets[:limit]
             
             return MarketSearchResult(
                 success=True,
                 query="trending",
-                count=len(formatted_markets),
-                markets=formatted_markets
+                count=len(top_markets),
+                markets=top_markets
             )
             
         except Exception as e:
             logger.error(f"Error getting trending markets: {e}")
             return MarketSearchResult(
                 success=False,
-                error=str(e),
                 query="trending",
                 count=0,
-                markets=[]
+                error=str(e)
             )
     
-    async def get_market_details(
-        self,
-        market_id: str
-    ) -> MarketDetails:
-        """
-        Get detailed information about a specific market
+    async def get_liquid_markets(self, limit: int = 10, min_liquidity: float = 1000) -> MarketSearchResult:
+        await self._ensure_clients()
         
-        Args:
-            market_id: Polymarket market ID
-        
-        Returns:
-            MarketDetails with comprehensive market information
-        """
+        try:
+            markets = await self.gamma_client.get_markets(limit=limit * 3)
+            
+            liquid_markets = [
+                m for m in markets
+                if m.get("liquidity", 0) >= min_liquidity
+            ]
+            
+            active_markets = self._filter_active_markets(liquid_markets)
+            sorted_markets = sorted(active_markets, key=lambda x: x.get("liquidity", 0), reverse=True)
+            top_markets = sorted_markets[:limit]
+            
+            return MarketSearchResult(
+                success=True,
+                query=f"liquid_markets_min_{min_liquidity}",
+                count=len(top_markets),
+                markets=top_markets
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting liquid markets: {e}")
+            return MarketSearchResult(
+                success=False,
+                query="liquid_markets",
+                count=0,
+                error=str(e)
+            )
+    
+    async def get_market_details(self, market_id: str) -> MarketDetails:
         await self._ensure_clients()
         
         try:
@@ -489,197 +335,190 @@ class PolymarketToolkit(BaseToolkit):
                 market_id=market_id
             )
     
-    async def get_user_positions(
-        self,
-        user_address: str,
-        min_value: float = 0
-    ) -> UserPosition:
-        """
-        Get user positions (holdings) on Polymarket
-        
-        Args:
-            user_address: Ethereum wallet address (0x...)
-            min_value: Minimum position value to include (default: 0)
-        
-        Returns:
-            UserPosition with list of user's positions
-        """
+    async def get_user_positions(self, user_address: str, min_value: float = 0) -> UserPosition:
         await self._ensure_clients()
         
         try:
-            positions = await self.data_client.get_positions(
-                user=user_address,
-                size_threshold=int(min_value)
-            )
+            positions = await self.data_client.get_user_positions(user_address)
             
-            formatted_positions = []
-            total_value = 0
+            if not positions:
+                return UserPosition(
+                    success=True,
+                    user_address=user_address,
+                    count=0,
+                    total_value=0,
+                    positions=[]
+                )
             
-            for pos in positions:
-                value = pos.get("value", 0)
-                total_value += value
-                
-                formatted_positions.append({
-                    "market_id": pos.get("market"),
-                    "market_title": pos.get("marketQuestion"),
-                    "outcome": pos.get("outcome"),
-                    "size": pos.get("size"),
-                    "value": value,
-                    "entry_price": pos.get("entryPrice"),
-                    "current_price": pos.get("currentPrice"),
-                    "pnl": pos.get("pnl"),
-                    "pnl_percentage": pos.get("pnlPercentage")
-                })
+            filtered_positions = [p for p in positions if p.get("value", 0) >= min_value]
+            total_value = sum(p.get("value", 0) for p in filtered_positions)
             
             return UserPosition(
                 success=True,
                 user_address=user_address,
-                count=len(formatted_positions),
+                count=len(filtered_positions),
                 total_value=total_value,
-                positions=formatted_positions
+                positions=filtered_positions
             )
             
         except Exception as e:
             logger.error(f"Error getting user positions: {e}")
             return UserPosition(
                 success=False,
-                error=str(e),
                 user_address=user_address,
                 count=0,
                 total_value=0,
-                positions=[]
+                error=str(e)
             )
     
-    async def get_market_holders(
-        self,
-        market_id: str,
-        limit: int = 50
-    ) -> MarketHolder:
-        """
-        Get top holders of a specific market
-        
-        Args:
-            market_id: Polymarket market ID
-            limit: Number of holders to return (default: 50)
-        
-        Returns:
-            MarketHolder with list of top holders
-        """
+    async def get_market_holders(self, market_id: str, min_position_size: float = 10) -> MarketHolder:
         await self._ensure_clients()
         
         try:
-            holders = await self.data_client.get_holders(
-                market=market_id,
-                sort_by="size",
-                limit=limit
-            )
+            holders = await self.data_client.get_market_holders(market_id)
             
-            formatted_holders = []
-            for holder in holders:
-                formatted_holders.append({
-                    "address": holder.get("user"),
-                    "outcome": holder.get("outcome"),
-                    "size": holder.get("size"),
-                    "value": holder.get("value"),
-                    "entry_price": holder.get("avgEntryPrice"),
-                    "current_price": holder.get("currentPrice"),
-                    "pnl": holder.get("pnl")
-                })
+            if not holders:
+                return MarketHolder(
+                    success=True,
+                    market_id=market_id,
+                    count=0,
+                    holders=[]
+                )
+            
+            filtered_holders = [h for h in holders if h.get("size", 0) >= min_position_size]
+            sorted_holders = sorted(filtered_holders, key=lambda x: x.get("size", 0), reverse=True)
             
             return MarketHolder(
                 success=True,
                 market_id=market_id,
-                count=len(formatted_holders),
-                holders=formatted_holders
+                count=len(sorted_holders),
+                holders=sorted_holders
             )
             
         except Exception as e:
             logger.error(f"Error getting market holders: {e}")
             return MarketHolder(
                 success=False,
-                error=str(e),
                 market_id=market_id,
                 count=0,
-                holders=[]
+                error=str(e)
             )
     
-    async def get_liquid_markets(
+    async def place_order(
         self,
-        limit: int = 20
-    ) -> MarketSearchResult:
-        """
-        Get most liquid markets (highest liquidity, only active/future markets)
+        token_id: str,
+        side: str,
+        price: float,
+        size: float,
+        order_type: str = "GTC"
+    ) -> OrderResponse:
         
-        Args:
-            limit: Number of markets to return (default: 20)
-        
-        Returns:
-            MarketSearchResult with list of most liquid markets
-        """
-        await self._ensure_clients()
+        if not self.trading_enabled:
+            return OrderResponse(
+                success=False,
+                error="Trading is not enabled"
+            )
         
         try:
-            markets = await self.gamma_client.get_liquidity_leaders(limit=limit * 2)
-            markets = self._filter_active_markets(markets)
-            markets = markets[:limit]
+            await self._ensure_trading_client()
             
-            formatted_markets = []
-            for market in markets:
-                formatted_markets.append({
-                    "id": market.get("id"),
-                    "title": market.get("question"),
-                    "liquidity": market.get("liquidity"),
-                    "price_yes": market.get("outcomePrices", [None, None])[1],
-                    "volume_24h": market.get("volume24hr")
-                })
+            market_details = await self.get_market_details(token_id)
+            current_price = market_details.price_yes if market_details.success else None
+            liquidity = market_details.liquidity if market_details.success else None
             
-            return MarketSearchResult(
-                success=True,
-                query="liquidity_leaders",
-                count=len(formatted_markets),
-                markets=formatted_markets
+            cost = size * price
+            validation = self.risk_manager.validate_order(
+                size=cost,
+                price=price,
+                current_price=current_price,
+                liquidity=liquidity
+            )
+            
+            if not validation["valid"]:
+                return OrderResponse(
+                    success=False,
+                    error=f"Risk validation failed: {', '.join(validation['errors'])}"
+                )
+            
+            if validation["warnings"]:
+                logger.warning(f"Order warnings: {', '.join(validation['warnings'])}")
+            
+            result = await self.trading_client.place_limit_order(
+                token_id=token_id,
+                side=side,
+                price=price,
+                size=size,
+                order_type=order_type
+            )
+            
+            return OrderResponse(
+                success=result["success"],
+                order_id=result.get("order_id"),
+                status=result.get("status"),
+                error=result.get("error"),
+                details=result.get("details", {})
             )
             
         except Exception as e:
-            logger.error(f"Error getting liquid markets: {e}")
-            return MarketSearchResult(
+            logger.error(f"Order placement error: {e}")
+            return OrderResponse(
                 success=False,
-                error=str(e),
-                query="liquidity_leaders",
-                count=0,
-                markets=[]
+                error=str(e)
             )
-
-
-POLYMARKET_TOOLS = {
-    "search_markets": {
-        "description": "Search for prediction markets by keyword or topic",
-        "use_cases": ["find markets", "search predictions", "market discovery"],
-        "returns": "List of matching markets with prices and volume"
-    },
-    "get_trending_markets": {
-        "description": "Get trending markets by 24h volume",
-        "use_cases": ["trending markets", "popular predictions", "high volume"],
-        "returns": "Top markets sorted by 24h trading volume"
-    },
-    "get_market_details": {
-        "description": "Get detailed information about a specific market",
-        "use_cases": ["market analysis", "price check", "market info"],
-        "returns": "Comprehensive market data including prices, volume, liquidity"
-    },
-    "get_user_positions": {
-        "description": "Get user's positions and portfolio",
-        "use_cases": ["portfolio", "my positions", "user holdings"],
-        "returns": "User's positions with PnL and market details"
-    },
-    "get_market_holders": {
-        "description": "Get top holders of a market",
-        "use_cases": ["whale tracking", "top holders", "market concentration"],
-        "returns": "Top holders with position sizes and entry prices"
-    },
-    "get_liquid_markets": {
-        "description": "Get most liquid markets",
-        "use_cases": ["liquidity", "tradable markets", "depth"],
-        "returns": "Markets sorted by liquidity depth"
-    }
-}
+    
+    async def get_balance(self) -> Balance:
+        
+        if not self.trading_enabled:
+            return Balance(
+                success=False,
+                usdc_balance=0,
+                error="Trading is not enabled"
+            )
+        
+        try:
+            await self._ensure_trading_client()
+            
+            result = await self.trading_client.get_balance()
+            
+            return Balance(
+                success=result["success"],
+                usdc_balance=result.get("usdc_balance", 0),
+                positions=result.get("positions", []),
+                error=result.get("error")
+            )
+            
+        except Exception as e:
+            logger.error(f"Balance check error: {e}")
+            return Balance(
+                success=False,
+                usdc_balance=0,
+                error=str(e)
+            )
+    
+    async def cancel_order(self, order_id: str) -> OrderResponse:
+        
+        if not self.trading_enabled:
+            return OrderResponse(
+                success=False,
+                error="Trading is not enabled"
+            )
+        
+        try:
+            await self._ensure_trading_client()
+            
+            result = await self.trading_client.cancel_order(order_id)
+            
+            return OrderResponse(
+                success=result["success"],
+                order_id=order_id,
+                status=result.get("status"),
+                error=result.get("error"),
+                details=result.get("details", {})
+            )
+            
+        except Exception as e:
+            logger.error(f"Order cancellation error: {e}")
+            return OrderResponse(
+                success=False,
+                error=str(e)
+            )

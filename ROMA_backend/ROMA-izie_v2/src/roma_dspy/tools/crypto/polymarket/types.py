@@ -1,16 +1,9 @@
-# src/roma_dspy/tools/crypto/polymarket/types.py
-"""
-Type definitions for Polymarket Toolkit
-
-Pydantic models for structured data validation and type safety
-"""
-
 from typing import List, Dict, Any, Optional
+from enum import Enum
 from pydantic import BaseModel, Field
 
 
 class Market(BaseModel):
-    """Individual market data"""
     id: str
     title: str
     description: Optional[str] = None
@@ -27,7 +20,6 @@ class Market(BaseModel):
 
 
 class MarketSearchResult(BaseModel):
-    """Result of market search operation"""
     success: bool
     query: str
     count: int
@@ -36,7 +28,6 @@ class MarketSearchResult(BaseModel):
 
 
 class MarketDetails(BaseModel):
-    """Detailed market information"""
     success: bool
     market_id: str
     title: Optional[str] = None
@@ -55,7 +46,6 @@ class MarketDetails(BaseModel):
 
 
 class Position(BaseModel):
-    """Individual position data"""
     market_id: str
     market_title: Optional[str] = None
     outcome: str
@@ -68,7 +58,6 @@ class Position(BaseModel):
 
 
 class UserPosition(BaseModel):
-    """User positions result"""
     success: bool
     user_address: str
     count: int
@@ -78,7 +67,6 @@ class UserPosition(BaseModel):
 
 
 class Holder(BaseModel):
-    """Individual holder data"""
     address: str
     outcome: str
     size: float
@@ -89,7 +77,6 @@ class Holder(BaseModel):
 
 
 class MarketHolder(BaseModel):
-    """Market holders result"""
     success: bool
     market_id: str
     count: int
@@ -98,7 +85,6 @@ class MarketHolder(BaseModel):
 
 
 class Trade(BaseModel):
-    """Individual trade data"""
     id: str
     market: str
     user: str
@@ -111,7 +97,6 @@ class Trade(BaseModel):
 
 
 class Activity(BaseModel):
-    """User activity data"""
     id: str
     type: str
     market: Optional[str] = None
@@ -121,11 +106,90 @@ class Activity(BaseModel):
     transaction_hash: Optional[str] = None
 
 
+class OrderSide(str, Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class OrderType(str, Enum):
+    GTC = "GTC"
+    FOK = "FOK"
+    IOC = "IOC"
+
+
+class OrderStatus(str, Enum):
+    PENDING = "PENDING"
+    OPEN = "OPEN"
+    FILLED = "FILLED"
+    PARTIALLY_FILLED = "PARTIALLY_FILLED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+    FAILED = "FAILED"
+
+
+class OrderRequest(BaseModel):
+    token_id: str
+    side: OrderSide
+    price: float
+    size: float
+    order_type: OrderType = OrderType.GTC
+
+
+class OrderResponse(BaseModel):
+    success: bool
+    order_id: Optional[str] = None
+    status: Optional[str] = None
+    error: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class Balance(BaseModel):
+    success: bool
+    usdc_balance: float
+    allowance: float = 0
+    positions: List[Dict[str, Any]] = Field(default_factory=list)
+    total_value: float = 0
+    error: Optional[str] = None
+
+
+class TradeAnalysis(BaseModel):
+    success: bool
+    market_id: str
+    market_title: str
+    recommendation: str
+    confidence: float
+    entry_price: Optional[float] = None
+    target_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    position_size: Optional[float] = None
+    expected_return: Optional[float] = None
+    risk_level: str = "MEDIUM"
+    analysis: Dict[str, Any] = Field(default_factory=dict)
+    error: Optional[str] = None
+
+
+class RiskMetrics(BaseModel):
+    liquidity_score: float
+    volume_score: float
+    price_stability: float
+    market_age_days: int
+    holder_count: int
+    concentration_risk: float
+    overall_risk: str
+
+
 class PolymarketConfig(BaseModel):
-    """Configuration for Polymarket Toolkit"""
     timeout: int = Field(default=30, description="API timeout in seconds")
     cache_ttl: int = Field(default=300, description="Cache TTL in seconds")
     graph_api_key: Optional[str] = Field(default=None, description="The Graph API key")
+    
+    trading_enabled: bool = Field(default=False, description="Enable trading features")
+    private_key: Optional[str] = Field(default=None, description="Ethereum private key")
+    api_key: Optional[str] = Field(default=None, description="Polymarket API key")
+    api_secret: Optional[str] = Field(default=None, description="Polymarket API secret")
+    api_passphrase: Optional[str] = Field(default=None, description="Polymarket API passphrase")
+    max_order_size: float = Field(default=1000, description="Maximum order size in USDC")
+    max_slippage_percent: float = Field(default=5, description="Maximum allowed slippage %")
     
     class Config:
         extra = "allow"

@@ -1,0 +1,9 @@
+agents:
+     executor:
+       toolkits:
+         - class_name: PolymarketToolkit
+           enabled: true
+           toolkit_config:
+             trading_enabled: true
+             max_order_size: 1000
+             max_slippage_percent: 5
