@@ -217,11 +217,14 @@ class PolymarketTradingClient:
         await self._initialize()
         
         try:
-            balance = self.client.get_balance()
+            balance_data = self.client.get_balance_allowance()
+            balance = balance_data.get("balance", 0) if isinstance(balance_data, dict) else 0
+            allowance = balance_data.get("allowance", 0) if isinstance(balance_data, dict) else 0
             
             return {
                 "success": True,
-                "usdc_balance": float(balance),
+                "usdc_balance": float(balance) / 1e6,
+                "allowance": allowance,
                 "positions": []
             }
             

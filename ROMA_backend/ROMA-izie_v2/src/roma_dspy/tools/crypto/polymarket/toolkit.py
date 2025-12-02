@@ -375,7 +375,7 @@ class PolymarketToolkit(BaseToolkit):
         await self._ensure_clients()
         
         try:
-            positions = await self.data_client.get_user_positions(user_address)
+            positions = await self.data_client.get_positions(user=user_address, size_threshold=int(min_value))
             
             if not positions:
                 return UserPosition(

@@ -147,7 +147,8 @@ class ExecutionService:
                 config=config,
                 max_depth=max_depth,
                 enable_logging=True,
-                enable_checkpoints=True
+                enable_checkpoints=True,
+                execution_id=execution_id
             )
 
             logger.info(f"Executing {execution_id}")

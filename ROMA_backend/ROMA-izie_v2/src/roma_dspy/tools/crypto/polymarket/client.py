@@ -92,12 +92,12 @@ class PolymarketGammaClient:
         """Search for markets by title or description"""
         return await self.get_markets(search=query, limit=50, closed=closed)
     
-    async def get_markets_by_category(self, category: str, closed: bool = False) -> List[Dict[str, Any]]:
+    async def get_markets_by_category(self, category: str, limit: int = 100, closed: bool = False) -> List[Dict[str, Any]]:
         """Fetch markets in a specific category"""
         try:
             params = {
                 "category": category,
-                "limit": 100,
+                "limit": limit,
                 "closed": "true" if closed else "false",
                 "order_by": "volume_24h",
                 "sort_by": "desc"

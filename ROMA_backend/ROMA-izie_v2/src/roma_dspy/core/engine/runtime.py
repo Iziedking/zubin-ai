@@ -275,7 +275,7 @@ class ModuleRuntime:
                 toolkit_configs=agent._toolkit_configs
             )
             return [
-                {"name": name, "description": getattr(tool, "__doc__", "No description available")}
+                {"name": name, "description": (tool.__doc__ or "No description available")}
                 for name, tool in tools_dict.items()
             ]
         except Exception as e:
