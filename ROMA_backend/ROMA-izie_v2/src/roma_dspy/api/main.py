@@ -18,9 +18,6 @@ from roma_dspy.core.storage.postgres_storage import PostgresStorage
 from roma_dspy.logging_config import configure_from_config
 from roma_dspy.api.api_reveal import router as reveal_router
 
-# ============================================================================
-# Application State
-# ============================================================================
 
 class AppState:
     """Application state container."""
@@ -30,10 +27,6 @@ class AppState:
         self.execution_service: ExecutionService | None = None
         self.startup_time: datetime = datetime.now(timezone.utc)
 
-
-# ============================================================================
-# Lifespan Management
-# ============================================================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -52,24 +45,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     logger.info("Starting ROMA-DSPy API server")
 
-    # Initialize state
     app.state.app_state = AppState()
 
     try:
-        # Initialize ConfigManager
         logger.info("Initializing ConfigManager")
         config_manager = ConfigManager()
         app.state.app_state.config_manager = config_manager
 
-        # Load default config to get storage settings
-        default_config = config_manager.load_config()
+        profile = os.getenv("ROMA_PROFILE")
+        if profile:
+            logger.info(f"Loading profile: {profile}")
+        default_config = config_manager.load_config(profile=profile)
 
-        # Configure logging from config
         if default_config.logging:
             configure_from_config(default_config.logging)
             logger.info("Logging configured from config")
 
-        # Initialize PostgreSQL storage (guard against missing section)
         if (
             default_config.storage
             and default_config.storage.postgres
@@ -85,7 +76,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             storage = None
             app.state.app_state.storage = None
 
-        # Initialize ExecutionService
         if storage:
             logger.info("Initializing ExecutionService")
             execution_service = ExecutionService(
@@ -99,36 +89,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.warning("ExecutionService not initialized (storage disabled)")
             app.state.app_state.execution_service = None
 
-        # Initialize dependency injection
         if storage and config_manager:
             init_dependencies(storage, config_manager)
             logger.info("Dependency injection initialized")
 
         logger.info("ROMA-DSPy API server startup complete")
 
-        # Yield control to application
         yield
 
     finally:
-        # Shutdown
         logger.info("Shutting down ROMA-DSPy API server")
 
-        # Shutdown ExecutionService
         if app.state.app_state.execution_service:
             logger.info("Shutting down ExecutionService")
             await app.state.app_state.execution_service.shutdown()
 
-        # Close PostgreSQL connection
         if app.state.app_state.storage:
             logger.info("Closing PostgreSQL connection")
             await app.state.app_state.storage.close()
 
         logger.info("ROMA-DSPy API server shutdown complete")
 
-
-# ============================================================================
-# Application Factory
-# ============================================================================
 
 def create_app(enable_rate_limit: bool = True) -> FastAPI:
     """
@@ -150,12 +131,11 @@ def create_app(enable_rate_limit: bool = True) -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    # CORS middleware with environment-based configuration
     allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
     allowed_origins = (
         [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
         if allowed_origins_env
-        else ["*"]  # Allow all in development (not recommended for production)
+        else ["*"]
     )
 
     app.add_middleware(
@@ -166,14 +146,11 @@ def create_app(enable_rate_limit: bool = True) -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Request logging middleware
     app.add_middleware(RequestLoggingMiddleware)
 
-    # Rate limiting middleware (optional)
     if enable_rate_limit:
         app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
 
-    # Register routers
     from roma_dspy.api.routers import (
         health,
         executions,
@@ -189,7 +166,6 @@ def create_app(enable_rate_limit: bool = True) -> FastAPI:
     app.include_router(traces.router, prefix="/api/v1", tags=["traces"])
     app.include_router(reveal_router)
 
-    # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc):
         logger.error(f"Unhandled exception: {exc}")
@@ -204,9 +180,5 @@ def create_app(enable_rate_limit: bool = True) -> FastAPI:
 
     return app
 
-
-# ============================================================================
-# Application Instance
-# ============================================================================
 
 app = create_app()

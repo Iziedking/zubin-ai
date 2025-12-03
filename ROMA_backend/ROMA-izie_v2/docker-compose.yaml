@@ -89,6 +89,7 @@ services:
       # To run entirely in Docker, set this to http://mlflow:5000 in your .env.
       MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
       # S3/MinIO configuration for artifact storage
+      ROMA_PROFILE: crypto_agent
       MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://mlflow
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}

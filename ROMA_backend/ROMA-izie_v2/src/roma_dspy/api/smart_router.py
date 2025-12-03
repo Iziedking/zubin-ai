@@ -318,23 +318,43 @@ class SmartRouter:
             return 0.0
     
     def _format_markets(self, markets: list) -> str:
-        """Format markets for display"""
+        """Format markets for display - handles both raw and formatted data"""
         if not markets:
             return "No markets found."
         
         lines = []
         for i, market in enumerate(markets, 1):
-            title = market.get('title', 'Unknown')
-            volume = self._safe_float(market.get('volume_24h', 0))
+            title = market.get('title') or market.get('question', 'Unknown')
+            
+            volume = market.get('volume_24h') or market.get('volume24hr', 0)
+            volume = self._safe_float(volume)
+            
             price_yes = market.get('price_yes')
-            liquidity = self._safe_float(market.get('liquidity', 0))
+            if not price_yes and market.get('outcomePrices'):
+                prices = market.get('outcomePrices')
+                if isinstance(prices, str):
+                    import json
+                    try:
+                        prices = json.loads(prices)
+                        price_yes = prices[1] if len(prices) > 1 else None
+                    except:
+                        pass
+                elif isinstance(prices, list) and len(prices) > 1:
+                    price_yes = prices[1]
+            
+            liquidity = market.get('liquidity', 0)
+            liquidity = self._safe_float(liquidity)
             
             lines.append(f"{i}. {title}")
             lines.append(f"   Volume 24h: ${volume:,.2f}")
             if liquidity > 0:
                 lines.append(f"   Liquidity: ${liquidity:,.2f}")
             if price_yes:
-                lines.append(f"   Price (YES): {price_yes}")
+                try:
+                    price_float = float(price_yes)
+                    lines.append(f"   Price (YES): ${price_float:.3f}")
+                except:
+                    lines.append(f"   Price (YES): {price_yes}")
             lines.append("")
         
         return "\n".join(lines)
