@@ -1,8 +1,7 @@
-"""ExecutionService for managing solver lifecycle and background tasks."""
-
 import asyncio
 import gzip
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, Any
@@ -83,7 +82,8 @@ class ExecutionService:
         client_name: Optional[str] = None
     ) -> str:
         execution_id = str(uuid4())
-        config = self.config_manager.load_config()
+        profile = os.getenv("ROMA_PROFILE")
+        config = self.config_manager.load_config(profile=profile)
 
         merged_metadata = metadata or {}
         if client_name:
